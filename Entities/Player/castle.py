@@ -8,7 +8,7 @@ class castle(pygame.sprite.Sprite):
 
         self.image = pygame.image.load("Entities/Player/castle.png")
 
-        self.image = pygame.transform.scale(self.image, (100,100))
+        self.image = pygame.transform.scale(self.image, (60,60))
 
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
