@@ -2,7 +2,7 @@ import pygame
 
 
 # castle
-class castle(pygame.sprite.Sprite):
+class Castle(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
 
