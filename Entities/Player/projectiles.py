@@ -27,13 +27,6 @@ class Projectile(pygame.sprite.Sprite):
             self.kill()
 
 
-# SUBCLASES
-class Arrow(Projectile):
-    def __init__(self, start_pos, target_pos):
-        # Por defecto pierce=1 (muere al primer impacto). ¡Subir este número activará la penetración!
-        super().__init__(start_pos, target_pos, speed=300.0, damage=5, size=6, color="black", pierce=1)
-
-
 # SUBCLASES: Solo cambian los stats
 class Arrow(Projectile):
     def __init__(self, start_pos, target_pos):

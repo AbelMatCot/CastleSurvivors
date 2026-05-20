@@ -25,41 +25,90 @@ row = 24
 
 # variables
 
-border_bag = ["North","South","West","East"]
-random.shuffle(border_bag)
 current_tool = None
 
+pygame.font.init()
+ui_font = pygame.font.SysFont("Arial", 24, bold=True)
+
+# --- LÓGICA DE SPAWNS AVANZADA Y CALENDARIO ---
+spawn_counts = {"North": 0, "South": 0, "East": 0, "West": 0}
+existing_spawns_pos = {"North": [], "South": [], "East": [], "West": []}
+
+# Forzar los dos primeros en lados opuestos
+opposite_pairs = [("North", "South"), ("East", "West")]
+forced_initial_spawns = list(random.choice(opposite_pairs))
+random.shuffle(forced_initial_spawns) # Aleatorizamos quién sale primero de los dos
+
+# Pre-calculamos los tiempos (en segundos) y el tipo de spawn
+spawn_schedule = [
+    (90, "balanced"),   # Minuto 01:30
+    (180, "balanced"),  # Minuto 03:00
+    (270, "balanced"),  # Minuto 04:30
+    (360, "balanced"),  # Minuto 06:00
+    (450, "balanced"),  # Minuto 07:30
+    (540, "balanced"),  # Minuto 09:00
+    (630, "balanced"),  # Minuto 10:30
+    (720, "balanced"),  # Minuto 12:00
+    (810, "wildcard"),  # Minuto 13:30 (Primer comodín)
+    (900, "wildcard"),  # Minuto 15:00 (Segundo comodín)
+]
+
+# Añadimos los 2 spawns balanceados aleatorios entre el 15:00 (900s) y 17:30 (1050s)
+random_time_1 = random.uniform(910, 1040)
+random_time_2 = random.uniform(910, 1040)
+spawn_schedule.append((random_time_1, "balanced"))
+spawn_schedule.append((random_time_2, "balanced"))
+
+# Añadimos el último wildcard exacto en el 17:30 (1050s)
+spawn_schedule.append((1050, "wildcard"))
+
+# Ordenamos la lista cronológicamente para que el motor los procese en orden
+spawn_schedule.sort(key=lambda x: x[0])
 
 # --- FUNCIONES ---
 
-def get_spawn_pos():
-    border = get_border()
-    tunnel_random = random.randint(margin, col - margin - 1)
+def get_valid_border(spawn_type):
+    if spawn_type == "wildcard":
+        print("¡SPAWN COMODÍN ACTIVADO!")
+        return random.choice(["North", "South", "East", "West"])
+    else:
+        min_count = min(spawn_counts.values())
+        valid_borders = [b for b, c in spawn_counts.items() if c - min_count < 2]
 
-    if border == "North":
-        grid[0][tunnel_random] = spawn_zone
-        return tunnel_random, -1
-    elif border == "South":
-        grid[23][tunnel_random] = spawn_zone
-        return tunnel_random, 24
-    elif border == "West":
-        grid[tunnel_random][0] = spawn_zone
-        return -1, tunnel_random
-    elif border == "East":
-        grid[tunnel_random][23] = spawn_zone
-        return 24, tunnel_random
+        # Fallback por si la matemática se atasca
+        if not valid_borders:
+            valid_borders = ["North", "South", "East", "West"]
+        return random.choice(valid_borders)
 
-def get_border():
-    global border_bag
 
-    if len(border_bag) == 0:
-        border_bag = ["North", "South", "West", "East"]
-        random.shuffle(border_bag)
-    return border_bag.pop()
+def setup_spawn_point(spawn_group, spawn_type="balanced"):
+    side = get_valid_border(spawn_type)
+    if not side:
+        return
 
-def setup_spawn_point(spawn_group):
-    side = get_border()
-    center = random.randint(margin, col - margin - 1)
+    valid_pos = False
+    attempts = 0
+    center = 0
+
+    while not valid_pos and attempts < 50:
+        center = random.randint(margin, col - margin - 1)
+        conflict = False
+
+        for pos in existing_spawns_pos[side]:
+            if abs(center - pos) <= 1:
+                conflict = True
+                break
+
+        if not conflict:
+            valid_pos = True
+        attempts += 1
+
+    if not valid_pos:
+        return
+
+    existing_spawns_pos[side].append(center)
+    spawn_counts[side] += 1
+
     if side == "North":
         grid[0][center] = spawn_zone
         new_spawn = Spawn(center, -1, side)
@@ -68,10 +117,11 @@ def setup_spawn_point(spawn_group):
         new_spawn = Spawn(center, 24, side)
     elif side == "West":
         grid[center][0] = spawn_zone
-        new_spawn = Spawn(-1 ,center, side)
+        new_spawn = Spawn(-1, center, side)
     elif side == "East":
         grid[center][23] = spawn_zone
         new_spawn = Spawn(24, center, side)
+
     spawn_group.add(new_spawn)
 
 # --- INICIALIZACIÓN DE PYGAME ---
@@ -119,18 +169,19 @@ show_grid = True
 
 # --- OBJETOS Y GRUPOS ---
 player_group = pygame.sprite.Group()
-spawn_group = pygame.sprite.Group()
 enemy_group = pygame.sprite.Group()
 bullet_group = pygame.sprite.Group()
+spawn_group = pygame.sprite.Group()
 
 # X = 280 + 360 = 640 | Y = 360
+# Creamos el Reino que ahora dispara flechas de forma nativa
 castle_obj = Castle(640, 360)
 player_group.add(castle_obj)
 
 
 ###
 
-for _ in range(3):
+for _ in range(2):
     setup_spawn_point(spawn_group)
 
 # --- CONFIGURACIÓN DE CONTROLES REBINDABLES ---
@@ -141,6 +192,17 @@ controls = {
 
 # Estado de la herramienta actual: "wall" o "tower"
 current_tool = "wall"
+
+# --- RELOJ Y DIFICULTAD ---
+game_time = 0.0
+current_minute = 0
+difficulty_multiplier = 1.0
+
+# --- ECONOMÍA Y PROGRESIÓN ---
+player_gold = 100  # Un poco de oro inicial para que puedas probar a construir
+player_level = 1
+player_xp = 0
+xp_to_next_level = 10
 
 # --- BUCLE PRINCIPAL ---
 while running:
@@ -167,24 +229,34 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-
-        # click del ratón
+            # click del ratón
         if event.type == pygame.MOUSEBUTTONDOWN and on_grid:
             # Solo permitimos construir si la casilla está 100% libre
             if grid[hoverRow][hoverCol] == allow:
+
                 if current_tool == "wall":
-                    grid[hoverRow][hoverCol] = wall
+                    if player_gold >= 5:
+                        player_gold -= 5
+                        grid[hoverRow][hoverCol] = wall
+                        print("Muro construido. Oro restante:", player_gold)
+                    else:
+                        print("¡No tienes oro suficiente para el muro!")
 
                 elif current_tool == "tower":
-                    grid[hoverRow][hoverCol] = turret
+                    if player_gold >= 20:
+                        player_gold -= 20
+                        grid[hoverRow][hoverCol] = turret
 
-                    posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
-                    posY_px = (hoverRow * grid_size) + (grid_size // 2)
+                        posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
+                        posY_px = (hoverRow * grid_size) + (grid_size // 2)
 
-                    from Entities.Player.towers import ArrowTower
+                        from Entities.Player.towers import ArrowTower
 
-                    new_tower = ArrowTower(posX_px, posY_px)
-                    player_group.add(new_tower)
+                        new_tower = ArrowTower(posX_px, posY_px)
+                        player_group.add(new_tower)
+                        print("Torre construida. Oro restante:", player_gold)
+                    else:
+                        print("¡No tienes oro suficiente para la torre!")
 
 
         # teclas
@@ -192,7 +264,7 @@ while running:
             if event.key == pygame.K_g:
                 show_grid = not show_grid
 
-            # Deseleccionar todo con ESC
+            # Deseleccionar todito con ESC
             elif event.key == pygame.K_ESCAPE:
                 current_tool = None
                 print("Herramienta deseleccionada")
@@ -275,6 +347,17 @@ while running:
     enemy_group.draw(gameboard)
     bullet_group.draw(gameboard)
 
+    # 7. DIBUJAR INTERFAZ (UI)
+    seconds = int(game_time % 60)
+    time_str = f"{current_minute:02d}:{seconds:02d}"
+
+    ui_text = ui_font.render(
+        f"Tiempo: {time_str} | Dif: x{difficulty_multiplier} | Nvl: {player_level} | Oro: {player_gold}",
+        True,
+        "white"
+    )
+    gameboard.blit(ui_text, (20, 20))
+
     # 5. Escalado a pantalla completa
     screensize = screen.get_size()
     rescaled_gameboard = pygame.transform.scale(gameboard, screensize)
@@ -283,6 +366,22 @@ while running:
     # 5. Inicializar timer y updates de motores
     pygame.display.flip()
     dt = clock.tick(60) / 1000
+
+    # --- ACTUALIZAR RELOJ ---
+    game_time += dt
+    current_minute = int(game_time // 60)
+
+    difficulty_multiplier = round(1 + (current_minute / 8) ** 1.8, 2)
+
+    # --- GESTOR DE NUEVOS SPAWNS (CRONJOB) ---
+    if len(spawn_schedule) > 0:
+        # Leemos la siguiente tarea de la lista
+        next_spawn_time, next_spawn_type = spawn_schedule[0]
+
+        if game_time >= next_spawn_time:
+            setup_spawn_point(spawn_group, next_spawn_type)
+            spawn_schedule.pop(0)  # Lo borramos de la lista para no repetirlo
+            print(f"[{current_minute}:{int(game_time % 60):02d}] Nuevo túnel abierto. Faltan: {len(spawn_schedule)}")
 
     spawn_group.update(dt, enemy_group, grid, offsetX, grid_size)
     enemy_group.update(dt, grid)  # <--- ¡Ahora solo necesita dt y grid!
@@ -332,6 +431,16 @@ while running:
 
                 # Destruir al enemigo si se queda sin vida
                 if enemy.health <= 0:
+                    player_gold += enemy.gold_value
+                    player_xp += enemy.xp_value
+
+                    # Subir de nivel
+                    if player_xp >= xp_to_next_level:
+                        player_xp -= xp_to_next_level
+                        player_level += 1
+                        print("¡SUBISTE DE NIVEL!")
+                        xp_to_next_level = int(xp_to_next_level * 1.5)  # Cada nivel cuesta un poco más
+
                     enemy.kill()
 
                 arrow.pierce -= 1

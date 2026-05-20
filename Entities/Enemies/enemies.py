@@ -3,10 +3,13 @@ import random
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, pixel_x, pixel_y, grid_size, offset_x, health, speed, color, radius):
+    def __init__(self, pixel_x, pixel_y, grid_size, offset_x, health, speed, color, radius, xp_value, gold_value):
         pygame.sprite.Sprite.__init__(self)
         self.radius = radius
         self.base_color = color
+
+        self.gold_value = gold_value
+        self.xp_value = xp_value
 
         self.image = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
         pygame.draw.circle(self.image, color, (radius, radius), radius)
@@ -90,17 +93,12 @@ class Enemy(pygame.sprite.Sprite):
 
 class Basic(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # Llamamos al padre y le pasas: health=10, speed=60, color="red", radius=8
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, 10, 60.0, "red", 8)
-
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, 10, 60.0, "red", 8, gold_value=2, xp_value=5)
 
 class Fast(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # Un bicho verde, más rápido pero con menos vida: health=5, speed=120, color="green"
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, 5, 120.0, "green", 6)
-
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, 5, 120.0, "green", 6, gold_value=3, xp_value=8)
 
 class Tank(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # Un bicho gordo y lento: health=40, speed=30, color="blue", radius=14
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, 40, 30.0, "blue", 14)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, 40, 30.0, "blue", 14, gold_value=10, xp_value=25)
