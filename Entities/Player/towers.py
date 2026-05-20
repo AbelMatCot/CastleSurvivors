@@ -1,22 +1,19 @@
 import pygame
-from Entities.Player.projectiles import Arrow, Fireball
+from Entities.Player.projectiles import Arrow, Fireball, Kunai
 
 
 class Tower(pygame.sprite.Sprite):
-    def __init__(self, x, y, cooldown, range_px, projectile_class):
+    def __init__(self, x, y, cooldown, range_px, projectile_class, color="blue"):
         super().__init__()
         self.shoot_timer = 0.0
         self.shoot_cooldown = cooldown
         self.range = range_px
         self.projectile_class = projectile_class
 
-        # Dibujo temporal (núcleo azul)
         self.image = pygame.Surface((30, 30), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, "blue", (15, 15), 10)
+        pygame.draw.circle(self.image, color, (15, 15), 10)
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-
-        # Posición
         self.x = x
         self.y = y
 
@@ -25,8 +22,6 @@ class Tower(pygame.sprite.Sprite):
         if self.shoot_timer >= self.shoot_cooldown:
             closest_enemy = None
             min_dist = float("inf")
-
-            # El rango se calcula desde la torre
             tower_pos = pygame.math.Vector2(self.x, self.y)
 
             for enemy in enemy_group:
@@ -37,15 +32,36 @@ class Tower(pygame.sprite.Sprite):
 
             if closest_enemy:
                 self.shoot_timer = 0.0
-                new_bullet = self.projectile_class((self.x, self.y), closest_enemy.pos)
-                bullet_group.add(new_bullet)
+                if self.projectile_class:
+                    new_bullet = self.projectile_class((self.x, self.y), closest_enemy.pos)
+                    bullet_group.add(new_bullet)
+                else:
+                    self.fire_laser(closest_enemy)
+
+    def fire_laser(self, enemy):
+        pass  # Se usa solo en el láser
 
 
 class ArrowTower(Tower):
     def __init__(self, x, y):
-        super().__init__(x, y, cooldown=0.6, range_px=150.0, projectile_class=Arrow)
+        super().__init__(x, y, cooldown=0.8, range_px=120.0, projectile_class=Arrow, color="white")
 
 
 class FireballTower(Tower):
     def __init__(self, x, y):
-        super().__init__(x, y, cooldown=1.5, range_px=200.0, projectile_class=Fireball)
+        super().__init__(x, y, cooldown=1.5, range_px=75.0, projectile_class=Fireball, color="orange")
+
+
+class KunaiTower(Tower):
+    def __init__(self, x, y):
+        super().__init__(x, y, cooldown=1.0, range_px=90.0, projectile_class=Kunai, color="gray")
+
+
+class LaserTower(Tower):
+    def __init__(self, x, y):
+        super().__init__(x, y, cooldown=0.2, range_px=60.0, projectile_class=None, color="cyan")
+        self.slow_factor = 0.8  # Deja la velocidad al 80% (-20%)
+
+    def fire_laser(self, enemy):
+        enemy.take_damage(1)
+        enemy.apply_slow(self.slow_factor, 0.5)

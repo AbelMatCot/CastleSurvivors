@@ -27,13 +27,16 @@ class Projectile(pygame.sprite.Sprite):
             self.kill()
 
 
-# SUBCLASES: Solo cambian los stats
+# SUBCLASES
 class Arrow(Projectile):
     def __init__(self, start_pos, target_pos):
-        super().__init__(start_pos, target_pos, speed=300.0, damage=5, size=6, color="black")
-
+        super().__init__(start_pos, target_pos, speed=300.0, damage=5, size=6, color="black", pierce=1)
 
 class Fireball(Projectile):
     def __init__(self, start_pos, target_pos):
-        # Más lenta, pero mete un viaje atómico
-        super().__init__(start_pos, target_pos, speed=150.0, damage=25, size=12, color="orange")
+        super().__init__(start_pos, target_pos, speed=150.0, damage=10, size=12, color="orange", pierce=1)
+        self.aoe_radius = 10  # Píxeles de daño en área
+
+class Kunai(Projectile):
+    def __init__(self, start_pos, target_pos):
+        super().__init__(start_pos, target_pos, speed=400.0, damage=7, size=4, color="gray", pierce=1)
