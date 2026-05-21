@@ -6,6 +6,7 @@ import os
 from Entities.Player.castle import ArrowCastle, FireballCastle, KunaiCastle, LaserCastle
 from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower
 from Entities.spawn import Spawn
+from Entities.effects import Effect
 
 # --- CONSTANTES ---
 allow = 0
@@ -21,10 +22,12 @@ turret = 8
 # tamaño del tablero (24x24)
 width_gameboard = 720
 height_gameboard = 720
-offsetX = 280  # (1280 - 720) / 2
+offsetX = 280
 grid_size = 30
 col = 24
 row = 24
+
+time_scale = 1.0
 
 # --- CONFIGURACIÓN DE CONTROLES REBINDABLES ---
 config = configparser.ConfigParser()
@@ -44,8 +47,10 @@ if not os.path.exists(config_file):
 else:
     config.read(config_file)
 
+
 def get_key(key_str):
     return getattr(pygame, f"K_{key_str.lower()}")
+
 
 controls = {
     "sell": get_key(config["Keybinds"]["sell"]),
@@ -115,7 +120,6 @@ spawn_schedule.sort(key=lambda x: x[0])
 # --- FUNCIONES ---
 def get_valid_border(spawn_type):
     if spawn_type == "wildcard":
-        print("¡SPAWN COMODÍN ACTIVADO!")
         return random.choice(["North", "South", "East", "West"])
     else:
         if len(forced_initial_spawns) > 0:
@@ -141,7 +145,8 @@ def setup_spawn_point(spawn_group, spawn_type="balanced"):
         center = random.randint(margin, col - margin - 1)
         conflict = False
         for pos in existing_spawns_pos[side]:
-            if abs(center - pos) <= 1:
+            # Cambiamos de <= 1 a <= 2 para forzar un hueco de 2 celdas entre spawns
+            if abs(center - pos) <= 2:
                 conflict = True
                 break
         if not conflict:
@@ -154,25 +159,36 @@ def setup_spawn_point(spawn_group, spawn_type="balanced"):
     existing_spawns_pos[side].append(center)
     spawn_counts[side] += 1
 
+    # Determinamos coordenadas para el spawn
+    spawn_y = 0
     if side == "North":
-        grid[0][center] = spawn_zone
+        for i in range(0, margin): grid[i][center] = spawn_zone
+        spawn_y = -1
         new_spawn = Spawn(center, -1, side)
     elif side == "South":
-        grid[23][center] = spawn_zone
-        new_spawn = Spawn(center, 24, side)
+        for i in range(row - margin, row): grid[i][center] = spawn_zone
+        spawn_y = row
+        new_spawn = Spawn(center, row, side)
     elif side == "West":
-        grid[center][0] = spawn_zone
+        for i in range(0, margin): grid[center][i] = spawn_zone
+        spawn_y = center
         new_spawn = Spawn(-1, center, side)
     elif side == "East":
-        grid[center][23] = spawn_zone
-        new_spawn = Spawn(24, center, side)
+        for i in range(col - margin, col): grid[center][i] = spawn_zone
+        spawn_y = center
+        new_spawn = Spawn(col, center, side)
 
     spawn_group.add(new_spawn)
 
+    # CALCULAMOS LA POSICIÓN EN PÍXELES AQUÍ (sin depender de .rect)
+    fx = offsetX + (new_spawn.spawn_x * grid_size) + (grid_size / 2)
+    fy = (new_spawn.spawn_y * grid_size) + (grid_size / 2)
+
+    dust = Effect(fx, fy, dust_sheet, scale_size=60, fps=12)
+    effects_group.add(dust)
 
 def get_level_up_cards():
     pool = []
-
     for t_id in ["arrow", "fireball", "kunai", "laser"]:
         lvl = tower_levels[t_id]
         if lvl == 0:
@@ -197,6 +213,23 @@ def get_level_up_cards():
     return cards
 
 
+# --- SISTEMA DE TILESETS (AUTOTILING) ---
+def get_tile(sheet, x, y, width, height, scale_size):
+    image = pygame.Surface((width, height), pygame.SRCALPHA)
+    image.blit(sheet, (0, 0), (x, y, width, height))
+    return pygame.transform.scale(image, (scale_size, scale_size))
+
+
+def get_tile_for_cell(col_idx, row_idx, target_types, tile_dict, oob_is_target=True):
+    N = (row_idx == 0 and oob_is_target) or (row_idx > 0 and grid[row_idx - 1][col_idx] in target_types)
+    S = (row_idx == row - 1 and oob_is_target) or (row_idx < row - 1 and grid[row_idx + 1][col_idx] in target_types)
+    W = (col_idx == 0 and oob_is_target) or (col_idx > 0 and grid[row_idx][col_idx - 1] in target_types)
+    E = (col_idx == col - 1 and oob_is_target) or (col_idx < col - 1 and grid[row_idx][col_idx + 1] in target_types)
+
+    key = (int(N), int(S), int(W), int(E))
+    return tile_dict.get(key, tile_dict.get((1, 1, 1, 1)))
+
+
 # --- INICIALIZACIÓN DE PYGAME ---
 pygame.init()
 screen = pygame.display.set_mode((1280, 720), pygame.RESIZABLE)
@@ -204,6 +237,54 @@ base_res = (1280, 720)
 gameboard = pygame.Surface(base_res)
 clock = pygame.time.Clock()
 running = True
+
+# --- CARGA DE ASSETS ---
+path_color2 = os.path.join("Assets", "Sprites", "Tiles", "Tilemap_color2.png")
+path_color4 = os.path.join("Assets", "Sprites", "Tiles", "Tilemap_color4.png")
+path_elevation = os.path.join("Assets", "Sprites", "Tiles", "Tilemap_Elevation.png")
+
+try:
+    color2_sheet = pygame.image.load(path_color2).convert_alpha()
+    color4_sheet = pygame.image.load(path_color4).convert_alpha()
+    elevation_sheet = pygame.image.load(path_elevation).convert_alpha()
+except FileNotFoundError:
+    print("ERROR: Faltan las texturas en la carpeta.")
+    pygame.quit()
+    exit()
+
+# Textura de fondo general (Centro del color4)
+background_tile = get_tile(color4_sheet, 64, 64, 64, 64, grid_size)
+
+# Diccionario de la zona construible (Color2) (Norte, Sur, Oeste, Este)
+buildable_tiles = {
+    (1, 1, 1, 1): get_tile(color2_sheet, 64, 64, 64, 64, grid_size),   # Centro
+    (0, 1, 1, 1): get_tile(color2_sheet, 64, 0, 64, 64, grid_size),    # Borde Arriba
+    (1, 0, 1, 1): get_tile(color2_sheet, 64, 128, 64, 64, grid_size),  # Borde Abajo
+    (1, 1, 0, 1): get_tile(color2_sheet, 0, 64, 64, 64, grid_size),    # Borde Izquierda
+    (1, 1, 1, 0): get_tile(color2_sheet, 128, 64, 64, 64, grid_size),  # Borde Derecha
+    (0, 1, 0, 1): get_tile(color2_sheet, 0, 0, 64, 64, grid_size),     # Esq. Sup Izq
+    (0, 1, 1, 0): get_tile(color2_sheet, 128, 0, 64, 64, grid_size),   # Esq. Sup Der
+    (1, 0, 0, 1): get_tile(color2_sheet, 0, 128, 64, 64, grid_size),   # Esq. Inf Izq
+    (1, 0, 1, 0): get_tile(color2_sheet, 128, 128, 64, 64, grid_size), # Esq. Inf Der
+}
+
+# Diccionario de montañas (Norte, Sur, Oeste, Este)
+mountain_tiles = {
+    (1, 0, 1, 1): get_tile(elevation_sheet, 64, 192, 64, 64, grid_size),  # Norte (Pared frontal B4)
+    (0, 1, 1, 1): get_tile(elevation_sheet, 64, 0, 64, 64, grid_size),    # Sur
+    (1, 1, 0, 1): get_tile(elevation_sheet, 0, 64, 64, 64, grid_size),    # Oeste
+    (1, 1, 1, 0): get_tile(elevation_sheet, 128, 64, 64, 64, grid_size),  # Este
+    (1, 0, 0, 1): get_tile(elevation_sheet, 0, 192, 64, 64, grid_size),   # Esq. Inf Izq (Pared frontal cortada A4)
+    (1, 0, 1, 0): get_tile(elevation_sheet, 128, 192, 64, 64, grid_size), # Esq. Inf Der (Pared frontal cortada C4)
+    (0, 1, 0, 1): get_tile(elevation_sheet, 0, 0, 64, 64, grid_size),     # Esq. Sup Izq
+    (0, 1, 1, 0): get_tile(elevation_sheet, 128, 0, 64, 64, grid_size),   # Esq. Sup Der
+    (1, 1, 1, 1): get_tile(elevation_sheet, 64, 64, 64, 64, grid_size),   # Centro
+}
+
+# Carga de efectos
+effects_group = pygame.sprite.Group()
+explosion_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "Explosion_01.png")).convert_alpha()
+dust_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "Dust_02.png")).convert_alpha()
 
 # --- MATRIZ Y TABLERO ---
 grid = [[0 for _ in range(col)] for _ in range(row)]
@@ -213,7 +294,7 @@ for y in range(row):
         if x == 0 or x == col - 1 or y == 0 or y == row - 1:
             grid[y][x] = mountain
         elif x < margin or x >= col - margin or y < margin or y >= row - margin:
-            grid[y][x] = spawn_zone
+            grid[y][x] = forbid  # Mantenemos las esquinas de color de césped
         else:
             grid[y][x] = allow
 
@@ -230,7 +311,7 @@ for x in range(0, col):
         if grid[y][x] == allow:
             pygame.draw.rect(grid_overlay, white_grid, (x * grid_size, y * grid_size, grid_size, grid_size), 1)
 
-show_grid = True
+show_grid = False
 
 # --- OBJETOS Y GRUPOS ---
 player_group = pygame.sprite.Group()
@@ -260,6 +341,14 @@ while running:
 
     on_grid = limitW <= mouseX < limitE and limitN <= mouseY < limitS
 
+    # --- CONTROL DE VELOCIDAD ---
+    keys = pygame.key.get_pressed()
+    time_scale = 1.0
+    if keys[pygame.K_z]:
+        time_scale = 2.0
+    elif keys[pygame.K_x]:
+        time_scale = 4.0
+
     if on_grid:
         hoverCol = (mouseX - offsetX) // grid_size
         hoverRow = mouseY // grid_size
@@ -288,7 +377,6 @@ while running:
 
                         game_state = "PLAYING"
                         title_text = chosen["title"]
-                        print(f"Carta elegida: {title_text}")
 
             elif game_state == "PLAYING" and on_grid:
                 if current_tool == "sell":
@@ -301,7 +389,6 @@ while running:
 
                         if cell_type == wall:
                             player_gold += 2
-                            print("Muro vendido.")
                         elif cell_type == turret:
                             for t in player_group:
                                 if "castle" in type(t).__name__.lower():
@@ -312,7 +399,6 @@ while running:
                                     if t_col == hoverCol and t_row == hoverRow:
                                         t.kill()
                                         player_gold += 10
-                                        print("Torre vendida. Oro devuelto: 10")
                                         break
 
                 elif grid[hoverRow][hoverCol] == allow:
@@ -321,11 +407,12 @@ while running:
                             player_gold -= 5
                             grid[hoverRow][hoverCol] = wall
                             structures_hp[(hoverRow, hoverCol)] = 150
-                            print("Muro construido. Oro:", player_gold)
                     elif current_tool in ["arrow", "fireball", "kunai", "laser"]:
                         lvl = tower_levels[current_tool]
                         current_count = sum(
-                            1 for t in player_group if type(t).__name__.lower().startswith(current_tool) and "castle" not in type(t).__name__.lower())
+                            1 for t in player_group if
+                            type(t).__name__.lower().startswith(current_tool) and "castle" not in type(
+                                t).__name__.lower())
 
                         if current_count < tower_limits[current_tool][lvl]:
                             costs = {"arrow": 18, "fireball": 25, "kunai": 29, "laser": 33}
@@ -348,9 +435,6 @@ while running:
                                     new_tower = LaserTower(posX_px, posY_px)
 
                                 player_group.add(new_tower)
-                                print(f"Torre {current_tool} construida ({current_count + 1}/{tower_limits[current_tool][lvl]}).")
-                        else:
-                            print(f"Límite de torres {current_tool} alcanzado para el nivel {lvl}.")
 
         if event.type == pygame.KEYDOWN:
             if game_state == "PLAYING":
@@ -375,31 +459,43 @@ while running:
                     t = unlocked_towers_order[3]
                     current_tool = t if current_tool != t else None
 
-    # --- DIBUJADO BASE ---
+    # --- DIBUJADO DE CAPAS BASE Y TERRENO ---
     gameboard.fill("#222222")
     pygame.draw.rect(gameboard, "#000000", (offsetX, 0, width_gameboard, height_gameboard))
 
-    for y in range(24):
-        for x in range(24):
-            posY = y * grid_size
+    # 1. Capa Inferior: Fondo general
+    for y in range(row):
+        for x in range(col):
             posX = offsetX + (x * grid_size)
+            posY = y * grid_size
+            gameboard.blit(background_tile, (posX, posY))
 
-            if grid[y][x] == allow:
-                pygame.draw.rect(gameboard, "green", (posX, posY, grid_size, grid_size))
-            elif grid[y][x] == forbid:
-                pygame.draw.rect(gameboard, "gray", (posX, posY, grid_size, grid_size))
-            elif grid[y][x] == spawn_zone:
-                pygame.draw.rect(gameboard, "darkgray", (posX, posY, grid_size, grid_size))
-            elif grid[y][x] == castle:
+    # 2. Capa Superior: Autotiling de montañas y zona construible
+    buildable_targets = [allow, castle, wall, turret]
+
+    for y in range(row):
+        for x in range(col):
+            posX = offsetX + (x * grid_size)
+            posY = y * grid_size
+            cell = grid[y][x]
+
+            # Terrenos dinámicos
+            if cell in buildable_targets:
+                tile = get_tile_for_cell(x, y, buildable_targets, buildable_tiles, False)
+                gameboard.blit(tile, (posX, posY))
+            elif cell == mountain:
+                tile = get_tile_for_cell(x, y, [mountain], mountain_tiles, True)
+                gameboard.blit(tile, (posX, posY))
+
+            # --- AQUÍ HEMOS BORRADO LOS RECTÁNGULOS NEGROS DE SPAWN ---
+
+            # Dibujar muros y castillo temporalmente por encima
+            if cell == castle:
                 pygame.draw.rect(gameboard, "yellow", (posX, posY, grid_size, grid_size))
-            elif grid[y][x] == wall:
+            elif cell == wall:
                 pygame.draw.rect(gameboard, "brown", (posX, posY, grid_size, grid_size))
-            elif grid[y][x] == turret:
+            elif cell == turret:
                 pygame.draw.rect(gameboard, "blue", (posX, posY, grid_size, grid_size))
-            elif grid[y][x] == spawn:
-                pygame.draw.rect(gameboard, "purple", (posX, posY, grid_size, grid_size))
-            elif grid[y][x] == mountain:
-                pygame.draw.rect(gameboard, "orange", (posX, posY, grid_size, grid_size))
 
     if show_grid:
         gameboard.blit(grid_overlay, (offsetX, 0))
@@ -426,16 +522,29 @@ while running:
 
         gameboard.blit(surface_trans, (posX_trans, posY_trans))
 
+    # Dibujado de grupos
     player_group.draw(gameboard)
     enemy_group.draw(gameboard)
     bullet_group.draw(gameboard)
+    effects_group.draw(gameboard)
+
+    # --- DIBUJADO DEL RAYO LÁSER HITSCAN ---
+    for tower in player_group:
+        # Comprobamos si es una torre láser (tanto el castillo como las pequeñas)
+        name = type(tower).__name__.lower()
+        if "laser" in name and hasattr(tower, "target") and tower.target is not None:
+            # Dibujamos una línea recta azul desde el centro de la torre hasta el enemigo
+            start_pos = tower.rect.center
+            end_pos = tower.target.rect.center
+            # Parámetros: superficie, color (RGB), inicio, fin, grosor en px
+            pygame.draw.line(gameboard, (0, 191, 255), start_pos, end_pos, 3)
 
     # UI Texto
     seconds = int(game_time % 60)
     time_str = f"{current_minute:02d}:{seconds:02d}"
     ui_text = ui_font.render(
         f"Tiempo: {time_str} | Nvl: {player_level} | Oro: {player_gold} | Castillo HP: {castle_hp}/{castle_max_hp}",
-        True, "white"
+        True, "white", "#222222"  # <--- Añadido el fondo aquí
     )
     gameboard.blit(ui_text, (20, 20))
 
@@ -474,9 +583,9 @@ while running:
     pygame.display.flip()
     dt = clock.tick(60) / 1000
 
-    # --- LÓGICA DE JUEGO (SOLO SI NO ESTÁ PAUSADO) ---
+    # --- LÓGICA DE JUEGO ---
     if game_state == "PLAYING":
-        game_time += dt
+        game_time += dt * time_scale
         current_minute = int(game_time // 60)
         difficulty_multiplier = round(1 + (current_minute / 8) ** 1.8, 2)
 
@@ -486,8 +595,8 @@ while running:
                 setup_spawn_point(spawn_group, next_spawn_type)
                 spawn_schedule.pop(0)
 
-        spawn_group.update(dt, enemy_group, grid, offsetX, grid_size)
-        enemy_group.update(dt, grid, enemy_group=enemy_group, structures_hp=structures_hp)
+        spawn_group.update(dt * time_scale, enemy_group, grid, offsetX, grid_size)
+        enemy_group.update(dt * time_scale, grid, enemy_group=enemy_group, structures_hp=structures_hp)
 
         collisions = pygame.sprite.groupcollide(enemy_group, enemy_group, False, False)
         for enemy, others in collisions.items():
@@ -513,20 +622,38 @@ while running:
                     enemy.pos += push_final.normalize() * 40.0 * dt
             enemy.rect.center = (round(enemy.pos.x), round(enemy.pos.y))
 
-        player_group.update(dt, enemy_group, bullet_group)
-        bullet_group.update(dt)
+        player_group.update(dt * time_scale, enemy_group, bullet_group)
+        bullet_group.update(dt * time_scale)
+        effects_group.update(dt * time_scale)
 
-        # --- COLISIONES OPTIMIZADAS ---
+        # Choque de proyectiles contra la montaña
+        for bullet in bullet_group:
+            bx = int((bullet.pos.x - offsetX) // grid_size)
+            by = int(bullet.pos.y // grid_size)
+            if 0 <= bx < col and 0 <= by < row:
+                if grid[by][bx] == mountain:
+                    if hasattr(bullet, "aoe_radius"):
+                        exp = Effect(bullet.rect.centerx, bullet.rect.centery, explosion_sheet,
+                                     int(bullet.aoe_radius * 3.5), fps=20)
+                        effects_group.add(exp)
+                    bullet.kill()
+
+        # ÚNICO BUCLE DE COLISIONES
         hits = pygame.sprite.groupcollide(bullet_group, enemy_group, False, False)
 
         for arrow, enemies_hit in hits.items():
             for enemy in enemies_hit:
                 if enemy not in arrow.hit_enemies:
                     arrow.hit_enemies.add(enemy)
-
                     final_damage = arrow.damage * (1.0 + global_damage_buff)
 
                     if hasattr(arrow, "aoe_radius"):
+                        # Genera la animación de la explosión
+                        exp = Effect(arrow.rect.centerx, arrow.rect.centery, explosion_sheet,
+                                     int(arrow.aoe_radius * 2.5), fps=20)
+                        effects_group.add(exp)
+
+                        # Aplica daño en área
                         for e in enemy_group:
                             if pygame.math.Vector2(arrow.rect.center).distance_to(e.pos) <= arrow.aoe_radius:
                                 e.take_damage(final_damage)

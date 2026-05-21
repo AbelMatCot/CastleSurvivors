@@ -8,6 +8,17 @@ class Spawn(pygame.sprite.Sprite):
         self.spawn_y = spawn_y
         self.border = border
 
+        # --- CORRECCIÓN ---
+        # Creamos una superficie invisible para que el sprite exista
+        self.image = pygame.Surface((30, 30), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+
+        # Posicionamos el rect inicial (puedes ajustarlo si necesitas precisión)
+        # Como main.py calcula las coordenadas en el update, esto evita el crash
+        self.rect.x = spawn_x
+        self.rect.y = spawn_y
+        # ------------------
+
         self.timer = 0.0
         self.spawn_cooldown = 3.0
 

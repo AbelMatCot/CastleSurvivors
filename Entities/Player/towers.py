@@ -1,6 +1,26 @@
 import pygame
 from Entities.Player.projectiles import Arrow, Fireball, Kunai
 
+class LaserMixin:
+    def init_laser_vars(self):
+        self.slow_factor = 0.8
+        self.is_firing = False
+        self.target = None
+        self.laser_timer = 0.0
+
+    def update_laser(self, dt):
+        if getattr(self, "is_firing", False):
+            self.laser_timer -= dt
+            if self.laser_timer <= 0:
+                self.is_firing = False
+                self.target = None
+
+    def fire_laser(self, enemy):
+        enemy.take_damage(1)
+        enemy.apply_slow(self.slow_factor, 0.5)
+        self.target = enemy
+        self.is_firing = True
+        self.laser_timer = 0.1
 
 class Tower(pygame.sprite.Sprite):
     def __init__(self, x, y, cooldown, range_px, projectile_class, color="blue"):
@@ -57,11 +77,11 @@ class KunaiTower(Tower):
         super().__init__(x, y, cooldown=1.0, range_px=90.0, projectile_class=Kunai, color="gray")
 
 
-class LaserTower(Tower):
+class LaserTower(Tower, LaserMixin):
     def __init__(self, x, y):
         super().__init__(x, y, cooldown=0.2, range_px=60.0, projectile_class=None, color="cyan")
-        self.slow_factor = 0.8  # Deja la velocidad al 80% (-20%)
+        self.init_laser_vars()
 
-    def fire_laser(self, enemy):
-        enemy.take_damage(1)
-        enemy.apply_slow(self.slow_factor, 0.5)
+    def update(self, dt, enemy_group, bullet_group):
+        super().update(dt, enemy_group, bullet_group)
+        self.update_laser(dt)

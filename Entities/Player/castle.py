@@ -1,5 +1,5 @@
 import pygame
-from Entities.Player.towers import Tower
+from Entities.Player.towers import Tower, LaserMixin
 from Entities.Player.projectiles import Arrow, Fireball, Kunai
 
 class Castle(Tower):
@@ -30,13 +30,12 @@ class KunaiCastle(Castle):
         super().__init__(x, y, cooldown=1.0, range_px=90.0, projectile_class=Kunai)
         print("¡Castillo Kunai listo! Torres de kunais incorporadas nativamente.")
 
-class LaserCastle(Castle):
+class LaserCastle(Castle, LaserMixin):
     def __init__(self, x, y):
-        super().__init__(x, y, cooldown=0.2, range_px=60.0, projectile_class=None)
-        self.slow_factor = 0.8
-        print("¡Castillo Láser listo! Torres láser incorporadas nativamente.")
+        # Asegúrate de poner aquí los valores de cooldown y rango que use tu castillo
+        super().__init__(x, y, cooldown=0.2, range_px=100.0, projectile_class=None, color="cyan")
+        self.init_laser_vars()
 
-    def fire_laser(self, enemy):
-        # Sobrescribimos el disparo para aplicar hitscan y ralentización
-        enemy.take_damage(1)
-        enemy.apply_slow(self.slow_factor, 0.5)
+    def update(self, dt, enemy_group, bullet_group):
+        super().update(dt, enemy_group, bullet_group)
+        self.update_laser(dt)
