@@ -19,7 +19,6 @@ spawn_zone = 6
 mountain = 7
 turret = 8
 
-# tamaño del tablero (24x24)
 width_gameboard = 720
 height_gameboard = 720
 offsetX = 280
@@ -69,7 +68,9 @@ level_up_options = []
 card_rects = []
 
 pygame.font.init()
-ui_font = pygame.font.SysFont("Arial", 24, bold=True)
+ui_font_large = pygame.font.SysFont("Arial", 28, bold=True)
+ui_font_medium = pygame.font.SysFont("Arial", 20, bold=True)
+ui_font_small = pygame.font.SysFont("Arial", 14, bold=True)
 
 # --- ECONOMÍA Y PROGRESIÓN ---
 player_gold = 100
@@ -83,7 +84,6 @@ castle_hp = castle_max_hp
 structures_hp = {}
 
 tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0}
-
 tower_limits = {
     "arrow": [0, 4, 4, 4, 5, 5, 5, 6, 6],
     "fireball": [0, 2, 2, 2, 3, 3, 3, 4, 4],
@@ -99,18 +99,10 @@ forced_initial_spawns = random.choice([["North", "South"], ["East", "West"]])
 random.shuffle(forced_initial_spawns)
 
 spawn_schedule = [
-    (90, "balanced"),
-    (180, "balanced"),
-    (270, "balanced"),
-    (360, "balanced"),
-    (450, "balanced"),
-    (540, "balanced"),
-    (630, "balanced"),
-    (720, "balanced"),
-    (810, "wildcard"),
-    (900, "wildcard"),
+    (90, "balanced"), (180, "balanced"), (270, "balanced"), (360, "balanced"),
+    (450, "balanced"), (540, "balanced"), (630, "balanced"), (720, "balanced"),
+    (810, "wildcard"), (900, "wildcard"),
 ]
-
 random_time_1 = random.uniform(910, 1040)
 random_time_2 = random.uniform(910, 1040)
 spawn_schedule.extend([(random_time_1, "balanced"), (random_time_2, "balanced"), (1050, "wildcard")])
@@ -124,7 +116,6 @@ def get_valid_border(spawn_type):
     else:
         if len(forced_initial_spawns) > 0:
             return forced_initial_spawns.pop(0)
-
         min_count = min(spawn_counts.values())
         valid_borders = [b for b, c in spawn_counts.items() if c - min_count < 2]
         if not valid_borders:
@@ -134,8 +125,7 @@ def get_valid_border(spawn_type):
 
 def setup_spawn_point(spawn_group, spawn_type="balanced"):
     side = get_valid_border(spawn_type)
-    if not side:
-        return
+    if not side: return
 
     valid_pos = False
     attempts = 0
@@ -145,75 +135,58 @@ def setup_spawn_point(spawn_group, spawn_type="balanced"):
         center = random.randint(margin, col - margin - 1)
         conflict = False
         for pos in existing_spawns_pos[side]:
-            # Cambiamos de <= 1 a <= 2 para forzar un hueco de 2 celdas entre spawns
-            if abs(center - pos) <= 2:
+            if abs(center - pos) <= 1:
                 conflict = True
                 break
         if not conflict:
             valid_pos = True
         attempts += 1
 
-    if not valid_pos:
-        return
+    if not valid_pos: return
 
     existing_spawns_pos[side].append(center)
     spawn_counts[side] += 1
 
-    # Determinamos coordenadas para el spawn
-    spawn_y = 0
     if side == "North":
         for i in range(0, margin): grid[i][center] = spawn_zone
-        spawn_y = -1
         new_spawn = Spawn(center, -1, side)
     elif side == "South":
         for i in range(row - margin, row): grid[i][center] = spawn_zone
-        spawn_y = row
         new_spawn = Spawn(center, row, side)
     elif side == "West":
         for i in range(0, margin): grid[center][i] = spawn_zone
-        spawn_y = center
         new_spawn = Spawn(-1, center, side)
     elif side == "East":
         for i in range(col - margin, col): grid[center][i] = spawn_zone
-        spawn_y = center
         new_spawn = Spawn(col, center, side)
 
     spawn_group.add(new_spawn)
-
-    # CALCULAMOS LA POSICIÓN EN PÍXELES AQUÍ (sin depender de .rect)
     fx = offsetX + (new_spawn.spawn_x * grid_size) + (grid_size / 2)
     fy = (new_spawn.spawn_y * grid_size) + (grid_size / 2)
-
     dust = Effect(fx, fy, dust_sheet, scale_size=60, fps=12)
     effects_group.add(dust)
+
 
 def get_level_up_cards():
     pool = []
     for t_id in ["arrow", "fireball", "kunai", "laser"]:
         lvl = tower_levels[t_id]
         if lvl == 0:
-            pool.append({"title": f"Desbloquear {t_id.capitalize()}", "type": "upgrade", "id": t_id})
+            pool.append({"title": f"Unlock {t_id.capitalize()}", "type": "upgrade", "id": t_id})
         elif lvl < 8:
-            pool.append({"title": f"Mejorar {t_id.capitalize()} (Nv{lvl + 1})", "type": "upgrade", "id": t_id})
+            pool.append({"title": f"Upgrade {t_id.capitalize()} (Lvl{lvl + 1})", "type": "upgrade", "id": t_id})
 
     if global_damage_buff < 1.0:
-        pool.append({"title": "Daño Global +10%", "type": "dmg_buff"})
+        pool.append({"title": "Global Damage +10%", "type": "dmg_buff"})
 
     random.shuffle(pool)
     cards = pool[:3]
-
-    fallbacks = [
-        {"title": "Bolsa de Oro (+50)", "type": "gold"},
-        {"title": "Curar Castillo 50%", "type": "heal"}
-    ]
-
+    fallbacks = [{"title": "Gold Sack (+50)", "type": "gold"}, {"title": "Heal Castle 50%", "type": "heal"}]
     while len(cards) < 3:
         cards.append(random.choice(fallbacks))
-
     return cards
 
 
-# --- SISTEMA DE TILESETS (AUTOTILING) ---
 def get_tile(sheet, x, y, width, height, scale_size):
     image = pygame.Surface((width, height), pygame.SRCALPHA)
     image.blit(sheet, (0, 0), (x, y, width, height))
@@ -225,9 +198,128 @@ def get_tile_for_cell(col_idx, row_idx, target_types, tile_dict, oob_is_target=T
     S = (row_idx == row - 1 and oob_is_target) or (row_idx < row - 1 and grid[row_idx + 1][col_idx] in target_types)
     W = (col_idx == 0 and oob_is_target) or (col_idx > 0 and grid[row_idx][col_idx - 1] in target_types)
     E = (col_idx == col - 1 and oob_is_target) or (col_idx < col - 1 and grid[row_idx][col_idx + 1] in target_types)
-
     key = (int(N), int(S), int(W), int(E))
     return tile_dict.get(key, tile_dict.get((1, 1, 1, 1)))
+
+
+# =====================================================================
+# --- MOTOR DE UI A PRUEBA DE BALAS ---
+# =====================================================================
+
+def extract_sprite(sheet, col, row, cols_total, rows_total):
+    """Corta un bloque de la hoja y elimina mágicamente los espacios transparentes"""
+    w = sheet.get_width() // cols_total
+    h = sheet.get_height() // rows_total
+    sub = sheet.subsurface((col * w, row * h, w, h))
+    bounding = sub.get_bounding_rect()
+    if bounding.width > 0 and bounding.height > 0:
+        return sub.subsurface(bounding)
+    return sub
+
+
+def draw_paper(surface, sheet, rect):
+    """Dibuja el papel especial usando 9 partes, protegiendo las esquinas"""
+    parts = [extract_sprite(sheet, c, r, 3, 3) for r in range(3) for c in range(3)]
+    tl, tc, tr = parts[0], parts[1], parts[2]
+    ml, mc, mr = parts[3], parts[4], parts[5]
+    bl, bc, br = parts[6], parts[7], parts[8]
+
+    # Hacemos las esquinas x2 más grandes para que luzcan bien, pero las limitamos para evitar overlapping
+    scale = 2
+    cw, ch = tl.get_width() * scale, tl.get_height() * scale
+    cw = min(cw, rect.width // 2)
+    ch = min(ch, rect.height // 2)
+
+    mid_w = max(0, rect.width - cw * 2)
+    mid_h = max(0, rect.height - ch * 2)
+
+    def blit_safe(part, dx, dy, dw, dh):
+        if dw > 0 and dh > 0:
+            surface.blit(pygame.transform.scale(part, (int(dw), int(dh))), (int(dx), int(dy)))
+
+    blit_safe(tl, rect.x, rect.y, cw, ch)
+    blit_safe(tc, rect.x + cw, rect.y, mid_w, ch)
+    blit_safe(tr, rect.right - cw, rect.y, cw, ch)
+
+    blit_safe(ml, rect.x, rect.y + ch, cw, mid_h)
+    blit_safe(mc, rect.x + cw, rect.y + ch, mid_w, mid_h)
+    blit_safe(mr, rect.right - cw, rect.y + ch, cw, mid_h)
+
+    blit_safe(bl, rect.x, rect.bottom - ch, cw, ch)
+    blit_safe(bc, rect.x + cw, rect.bottom - ch, mid_w, ch)
+    blit_safe(br, rect.right - cw, rect.bottom - ch, cw, ch)
+
+
+def draw_9_slice_button(surface, image, rect, edge_px=8):
+    """Estira el botón sin deformar sus bordes reales"""
+    w, h = image.get_size()
+    e_x = min(edge_px, w // 2 - 1, rect.width // 2)
+    e_y = min(edge_px, h // 2 - 1, rect.height // 2)
+
+    src_parts = [
+        (0, 0, e_x, e_y), (e_x, 0, w - e_x * 2, e_y), (w - e_x, 0, e_x, e_y),
+        (0, e_y, e_x, h - e_y * 2), (e_x, e_y, w - e_x * 2, h - e_y * 2), (w - e_x, e_y, e_x, h - e_y * 2),
+        (0, h - e_y, e_x, e_y), (e_x, h - e_y, w - e_x * 2, e_y), (w - e_x, h - e_y, e_x, e_y)
+    ]
+    o_x, o_y = e_x, e_y
+    dst_parts = [
+        (rect.x, rect.y, o_x, o_y),
+        (rect.x + o_x, rect.y, rect.width - o_x * 2, o_y),
+        (rect.right - o_x, rect.y, o_x, o_y),
+        (rect.x, rect.y + o_y, o_x, rect.height - o_y * 2),
+        (rect.x + o_x, rect.y + o_y, rect.width - o_x * 2, rect.height - o_y * 2),
+        (rect.right - o_x, rect.y + o_y, o_x, rect.height - o_y * 2),
+        (rect.x, rect.bottom - o_y, o_x, o_y),
+        (rect.x + o_x, rect.bottom - o_y, rect.width - o_x * 2, o_y),
+        (rect.right - o_x, rect.bottom - o_y, o_x, o_y)
+    ]
+
+    for src, dst in zip(src_parts, dst_parts):
+        if src[2] > 0 and src[3] > 0 and dst[2] > 0 and dst[3] > 0:
+            surface.blit(pygame.transform.scale(image.subsurface(src), (int(dst[2]), int(dst[3]))),
+                         (int(dst[0]), int(dst[1])))
+
+
+def draw_bar(surface, x, y, w, h, ratio, base_sheet, fill_sheet):
+    """Dibuja barras extrayendo limpiamente sus 3 partes para que nunca se deformen"""
+    left = extract_sprite(base_sheet, 0, 0, 3, 1)
+    mid = extract_sprite(base_sheet, 1, 0, 3, 1)
+    right = extract_sprite(base_sheet, 2, 0, 3, 1)
+
+    edge_w = min(w // 2, int(h * (left.get_width() / left.get_height())))
+    mid_w = max(0, w - (edge_w * 2))
+
+    surface.blit(pygame.transform.scale(left, (edge_w, h)), (x, y))
+    if mid_w > 0:
+        surface.blit(pygame.transform.scale(mid, (mid_w, h)), (x + edge_w, y))
+    surface.blit(pygame.transform.scale(right, (edge_w, h)), (x + edge_w + mid_w, y))
+
+    if ratio > 0:
+        fill_crop = extract_sprite(fill_sheet, 0, 0, 1, 1)
+        pad_x = int(edge_w * 0.45)
+        pad_y = int(h * 0.25)
+        inner_w = max(1, w - (pad_x * 2))
+        inner_h = max(1, h - (pad_y * 2))
+        fill_w = max(1, int(inner_w * ratio))
+        surface.blit(pygame.transform.scale(fill_crop, (fill_w, inner_h)), (x + pad_x, y + pad_y))
+
+
+def draw_ribbon(surface, x, y, w, h, sheet):
+    """Crea lazos cortando limpiamente la fila superior"""
+    left = extract_sprite(sheet, 0, 0, 3, 2)
+    mid = extract_sprite(sheet, 1, 0, 3, 2)
+    right = extract_sprite(sheet, 2, 0, 3, 2)
+
+    edge_w = min(w // 2, int(h * (left.get_width() / left.get_height())))
+    mid_w = max(0, w - (edge_w * 2))
+
+    surface.blit(pygame.transform.scale(left, (edge_w, h)), (x, y))
+    if mid_w > 0:
+        surface.blit(pygame.transform.scale(mid, (mid_w, h)), (x + edge_w, y))
+    surface.blit(pygame.transform.scale(right, (edge_w, h)), (x + edge_w + mid_w, y))
+
+
+# =====================================================================
 
 
 # --- INICIALIZACIÓN DE PYGAME ---
@@ -248,53 +340,64 @@ try:
     color4_sheet = pygame.image.load(path_color4).convert_alpha()
     elevation_sheet = pygame.image.load(path_elevation).convert_alpha()
 except FileNotFoundError:
-    print("ERROR: Faltan las texturas en la carpeta.")
+    print("ERROR: Faltan las texturas de terreno en la carpeta Assets.")
     pygame.quit()
     exit()
 
-# Textura de fondo general (Centro del color4)
-background_tile = get_tile(color4_sheet, 64, 64, 64, 64, grid_size)
-
-# Diccionario de la zona construible (Color2) (Norte, Sur, Oeste, Este)
-buildable_tiles = {
-    (1, 1, 1, 1): get_tile(color2_sheet, 64, 64, 64, 64, grid_size),   # Centro
-    (0, 1, 1, 1): get_tile(color2_sheet, 64, 0, 64, 64, grid_size),    # Borde Arriba
-    (1, 0, 1, 1): get_tile(color2_sheet, 64, 128, 64, 64, grid_size),  # Borde Abajo
-    (1, 1, 0, 1): get_tile(color2_sheet, 0, 64, 64, 64, grid_size),    # Borde Izquierda
-    (1, 1, 1, 0): get_tile(color2_sheet, 128, 64, 64, 64, grid_size),  # Borde Derecha
-    (0, 1, 0, 1): get_tile(color2_sheet, 0, 0, 64, 64, grid_size),     # Esq. Sup Izq
-    (0, 1, 1, 0): get_tile(color2_sheet, 128, 0, 64, 64, grid_size),   # Esq. Sup Der
-    (1, 0, 0, 1): get_tile(color2_sheet, 0, 128, 64, 64, grid_size),   # Esq. Inf Izq
-    (1, 0, 1, 0): get_tile(color2_sheet, 128, 128, 64, 64, grid_size), # Esq. Inf Der
-}
-
-# Diccionario de montañas (Norte, Sur, Oeste, Este)
-mountain_tiles = {
-    (1, 0, 1, 1): get_tile(elevation_sheet, 64, 192, 64, 64, grid_size),  # Norte (Pared frontal B4)
-    (0, 1, 1, 1): get_tile(elevation_sheet, 64, 0, 64, 64, grid_size),    # Sur
-    (1, 1, 0, 1): get_tile(elevation_sheet, 0, 64, 64, 64, grid_size),    # Oeste
-    (1, 1, 1, 0): get_tile(elevation_sheet, 128, 64, 64, 64, grid_size),  # Este
-    (1, 0, 0, 1): get_tile(elevation_sheet, 0, 192, 64, 64, grid_size),   # Esq. Inf Izq (Pared frontal cortada A4)
-    (1, 0, 1, 0): get_tile(elevation_sheet, 128, 192, 64, 64, grid_size), # Esq. Inf Der (Pared frontal cortada C4)
-    (0, 1, 0, 1): get_tile(elevation_sheet, 0, 0, 64, 64, grid_size),     # Esq. Sup Izq
-    (0, 1, 1, 0): get_tile(elevation_sheet, 128, 0, 64, 64, grid_size),   # Esq. Sup Der
-    (1, 1, 1, 1): get_tile(elevation_sheet, 64, 64, 64, 64, grid_size),   # Centro
-}
-
-# Carga de efectos
 effects_group = pygame.sprite.Group()
 explosion_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "Explosion_01.png")).convert_alpha()
 dust_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "Dust_02.png")).convert_alpha()
 
-# --- MATRIZ Y TABLERO ---
-grid = [[0 for _ in range(col)] for _ in range(row)]
+ui_path = os.path.join("Assets", "UI")
+try:
+    btn_sheet = pygame.image.load(os.path.join(ui_path, "Button_Hover.png")).convert_alpha()
+    ribbon_sheet = pygame.image.load(os.path.join(ui_path, "SmallRibbons.png")).convert_alpha()
+    special_paper_sheet = pygame.image.load(os.path.join(ui_path, "SpecialPaper.png")).convert_alpha()
+    big_bar_base = pygame.image.load(os.path.join(ui_path, "BigBar_Base.png")).convert_alpha()
+    big_bar_fill = pygame.image.load(os.path.join(ui_path, "BigBar_Fill.png")).convert_alpha()
+    small_bar_base = pygame.image.load(os.path.join(ui_path, "SmallBar_Base.png")).convert_alpha()
+    small_bar_fill = pygame.image.load(os.path.join(ui_path, "SmallBar_Fill.png")).convert_alpha()
+except FileNotFoundError as e:
+    print(f"ERROR UI: No se encontró la imagen {e}. Revisa Assets/UI")
+    pygame.quit()
+    exit()
 
+# Extraemos los botones exactos de la hoja con nuestra función mágica (Cero espacios transparentes)
+btn_small_img = extract_sprite(btn_sheet, 0, 0, 2, 3)  # Arriba Izq
+btn_wide_img = extract_sprite(btn_sheet, 0, 1, 2, 3)  # Medio Izq
+
+background_tile = get_tile(color4_sheet, 64, 64, 64, 64, grid_size)
+buildable_tiles = {
+    (1, 1, 1, 1): get_tile(color2_sheet, 64, 64, 64, 64, grid_size),
+    (0, 1, 1, 1): get_tile(color2_sheet, 64, 0, 64, 64, grid_size),
+    (1, 0, 1, 1): get_tile(color2_sheet, 64, 128, 64, 64, grid_size),
+    (1, 1, 0, 1): get_tile(color2_sheet, 0, 64, 64, 64, grid_size),
+    (1, 1, 1, 0): get_tile(color2_sheet, 128, 64, 64, 64, grid_size),
+    (0, 1, 0, 1): get_tile(color2_sheet, 0, 0, 64, 64, grid_size),
+    (0, 1, 1, 0): get_tile(color2_sheet, 128, 0, 64, 64, grid_size),
+    (1, 0, 0, 1): get_tile(color2_sheet, 0, 128, 64, 64, grid_size),
+    (1, 0, 1, 0): get_tile(color2_sheet, 128, 128, 64, 64, grid_size),
+}
+
+mountain_tiles = {
+    (1, 0, 1, 1): get_tile(elevation_sheet, 64, 192, 64, 64, grid_size),
+    (0, 1, 1, 1): get_tile(elevation_sheet, 64, 0, 64, 64, grid_size),
+    (1, 1, 0, 1): get_tile(elevation_sheet, 0, 64, 64, 64, grid_size),
+    (1, 1, 1, 0): get_tile(elevation_sheet, 128, 64, 64, 64, grid_size),
+    (1, 0, 0, 1): get_tile(elevation_sheet, 0, 192, 64, 64, grid_size),
+    (1, 0, 1, 0): get_tile(elevation_sheet, 128, 192, 64, 64, grid_size),
+    (0, 1, 0, 1): get_tile(elevation_sheet, 0, 0, 64, 64, grid_size),
+    (0, 1, 1, 0): get_tile(elevation_sheet, 128, 0, 64, 64, grid_size),
+    (1, 1, 1, 1): get_tile(elevation_sheet, 64, 64, 64, 64, grid_size),
+}
+
+grid = [[0 for _ in range(col)] for _ in range(row)]
 for y in range(row):
     for x in range(col):
         if x == 0 or x == col - 1 or y == 0 or y == row - 1:
             grid[y][x] = mountain
         elif x < margin or x >= col - margin or y < margin or y >= row - margin:
-            grid[y][x] = forbid  # Mantenemos las esquinas de color de césped
+            grid[y][x] = forbid
         else:
             grid[y][x] = allow
 
@@ -313,7 +416,6 @@ for x in range(0, col):
 
 show_grid = False
 
-# --- OBJETOS Y GRUPOS ---
 player_group = pygame.sprite.Group()
 enemy_group = pygame.sprite.Group()
 bullet_group = pygame.sprite.Group()
@@ -325,15 +427,20 @@ player_group.add(castle_obj)
 for _ in range(2):
     setup_spawn_point(spawn_group, "balanced")
 
-# --- RELOJ Y DIFICULTAD ---
 game_time = 0.0
 current_minute = 0
 difficulty_multiplier = 1.0
 
 # --- BUCLE PRINCIPAL ---
 while running:
-    mouseX, mouseY = pygame.mouse.get_pos()
+    keys = pygame.key.get_pressed()
+    time_scale = 1.0
+    if keys[pygame.K_x]:
+        time_scale = 4.0
+    elif keys[pygame.K_z]:
+        time_scale = 2.0
 
+    mouseX, mouseY = pygame.mouse.get_pos()
     limitW = offsetX + (margin * grid_size)
     limitE = offsetX + (col - margin) * grid_size
     limitN = margin * grid_size
@@ -341,19 +448,10 @@ while running:
 
     on_grid = limitW <= mouseX < limitE and limitN <= mouseY < limitS
 
-    # --- CONTROL DE VELOCIDAD ---
-    keys = pygame.key.get_pressed()
-    time_scale = 1.0
-    if keys[pygame.K_z]:
-        time_scale = 2.0
-    elif keys[pygame.K_x]:
-        time_scale = 4.0
-
     if on_grid:
         hoverCol = (mouseX - offsetX) // grid_size
         hoverRow = mouseY // grid_size
 
-    # --- EVENTOS ---
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -374,9 +472,7 @@ while running:
                             global_damage_buff += 0.1
                         elif chosen["type"] == "gold":
                             player_gold += 50
-
                         game_state = "PLAYING"
-                        title_text = chosen["title"]
 
             elif game_state == "PLAYING" and on_grid:
                 if current_tool == "sell":
@@ -384,15 +480,13 @@ while running:
                         cell_type = grid[hoverRow][hoverCol]
                         grid[hoverRow][hoverCol] = allow
                         coords = (hoverRow, hoverCol)
-                        if coords in structures_hp:
-                            del structures_hp[coords]
+                        if coords in structures_hp: del structures_hp[coords]
 
                         if cell_type == wall:
                             player_gold += 2
                         elif cell_type == turret:
                             for t in player_group:
-                                if "castle" in type(t).__name__.lower():
-                                    continue
+                                if "castle" in type(t).__name__.lower(): continue
                                 if hasattr(t, "x") and hasattr(t, "y"):
                                     t_col = int((t.x - offsetX) // grid_size)
                                     t_row = int(t.y // grid_size)
@@ -409,10 +503,9 @@ while running:
                             structures_hp[(hoverRow, hoverCol)] = 150
                     elif current_tool in ["arrow", "fireball", "kunai", "laser"]:
                         lvl = tower_levels[current_tool]
-                        current_count = sum(
-                            1 for t in player_group if
-                            type(t).__name__.lower().startswith(current_tool) and "castle" not in type(
-                                t).__name__.lower())
+                        current_count = sum(1 for t in player_group if
+                                            type(t).__name__.lower().startswith(current_tool) and "castle" not in type(
+                                                t).__name__.lower())
 
                         if current_count < tower_limits[current_tool][lvl]:
                             costs = {"arrow": 18, "fireball": 25, "kunai": 29, "laser": 33}
@@ -421,20 +514,17 @@ while running:
                                 player_gold -= cost
                                 grid[hoverRow][hoverCol] = turret
                                 structures_hp[(hoverRow, hoverCol)] = 80
-
                                 posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
                                 posY_px = (hoverRow * grid_size) + (grid_size // 2)
 
                                 if current_tool == "arrow":
-                                    new_tower = ArrowTower(posX_px, posY_px)
+                                    player_group.add(ArrowTower(posX_px, posY_px))
                                 elif current_tool == "fireball":
-                                    new_tower = FireballTower(posX_px, posY_px)
+                                    player_group.add(FireballTower(posX_px, posY_px))
                                 elif current_tool == "kunai":
-                                    new_tower = KunaiTower(posX_px, posY_px)
+                                    player_group.add(KunaiTower(posX_px, posY_px))
                                 elif current_tool == "laser":
-                                    new_tower = LaserTower(posX_px, posY_px)
-
-                                player_group.add(new_tower)
+                                    player_group.add(LaserTower(posX_px, posY_px))
 
         if event.type == pygame.KEYDOWN:
             if game_state == "PLAYING":
@@ -463,14 +553,12 @@ while running:
     gameboard.fill("#222222")
     pygame.draw.rect(gameboard, "#000000", (offsetX, 0, width_gameboard, height_gameboard))
 
-    # 1. Capa Inferior: Fondo general
     for y in range(row):
         for x in range(col):
             posX = offsetX + (x * grid_size)
             posY = y * grid_size
             gameboard.blit(background_tile, (posX, posY))
 
-    # 2. Capa Superior: Autotiling de montañas y zona construible
     buildable_targets = [allow, castle, wall, turret]
 
     for y in range(row):
@@ -479,7 +567,6 @@ while running:
             posY = y * grid_size
             cell = grid[y][x]
 
-            # Terrenos dinámicos
             if cell in buildable_targets:
                 tile = get_tile_for_cell(x, y, buildable_targets, buildable_tiles, False)
                 gameboard.blit(tile, (posX, posY))
@@ -487,9 +574,6 @@ while running:
                 tile = get_tile_for_cell(x, y, [mountain], mountain_tiles, True)
                 gameboard.blit(tile, (posX, posY))
 
-            # --- AQUÍ HEMOS BORRADO LOS RECTÁNGULOS NEGROS DE SPAWN ---
-
-            # Dibujar muros y castillo temporalmente por encima
             if cell == castle:
                 pygame.draw.rect(gameboard, "yellow", (posX, posY, grid_size, grid_size))
             elif cell == wall:
@@ -522,33 +606,111 @@ while running:
 
         gameboard.blit(surface_trans, (posX_trans, posY_trans))
 
-    # Dibujado de grupos
     player_group.draw(gameboard)
     enemy_group.draw(gameboard)
     bullet_group.draw(gameboard)
     effects_group.draw(gameboard)
 
-    # --- DIBUJADO DEL RAYO LÁSER HITSCAN ---
     for tower in player_group:
-        # Comprobamos si es una torre láser (tanto el castillo como las pequeñas)
         name = type(tower).__name__.lower()
         if "laser" in name and hasattr(tower, "target") and tower.target is not None:
-            # Dibujamos una línea recta azul desde el centro de la torre hasta el enemigo
             start_pos = tower.rect.center
             end_pos = tower.target.rect.center
-            # Parámetros: superficie, color (RGB), inicio, fin, grosor en px
             pygame.draw.line(gameboard, (0, 191, 255), start_pos, end_pos, 3)
 
-    # UI Texto
-    seconds = int(game_time % 60)
-    time_str = f"{current_minute:02d}:{seconds:02d}"
-    ui_text = ui_font.render(
-        f"Tiempo: {time_str} | Nvl: {player_level} | Oro: {player_gold} | Castillo HP: {castle_hp}/{castle_max_hp}",
-        True, "white", "#222222"  # <--- Añadido el fondo aquí
-    )
-    gameboard.blit(ui_text, (20, 20))
+    # ==========================================
+    # --- DIBUJADO DE LA INTERFAZ DE USUARIO ---
+    # ==========================================
 
-    # UI Nivel
+    # ================= PANEL IZQUIERDO =================
+    # Reloj (Usando SpecialPaper EXCLUSIVAMENTE aquí)
+    clock_rect = pygame.Rect(75, 40, 120, 60)
+    draw_paper(gameboard, special_paper_sheet, clock_rect)
+
+    time_str = f"{current_minute:02d}:{int(game_time % 60):02d}"
+    time_surf = ui_font_large.render(time_str, True, "white")
+    gameboard.blit(time_surf,
+                   (clock_rect.centerx - time_surf.get_width() // 2, clock_rect.centery - time_surf.get_height() // 2))
+
+    # Barras de Estado (Extraídas mágicamente para evitar fallos de recorte)
+    hp_ratio = max(0, castle_hp / castle_max_hp)
+    draw_bar(gameboard, 25, 140, 220, 35, hp_ratio, big_bar_base, big_bar_fill)
+    hp_text = ui_font_medium.render(f"HP: {int(castle_hp)}/{castle_max_hp}", True, "white")
+    gameboard.blit(hp_text, (135 - hp_text.get_width() // 2, 147))
+
+    xp_ratio = min(1, player_xp / xp_to_next_level)
+    draw_bar(gameboard, 40, 190, 190, 25, xp_ratio, small_bar_base, small_bar_fill)
+    xp_text = ui_font_small.render(f"Lvl: {player_level}", True, "white")
+    gameboard.blit(xp_text, (135 - xp_text.get_width() // 2, 195))
+
+    # ================= PANEL DERECHO =================
+    rx = 1000
+
+
+    def draw_slot(x, y, size, key_text, cost=None):
+        # Botón extraído al vuelo escalado al cuadrado que toque
+        gameboard.blit(pygame.transform.scale(btn_small_img, (size, size)), (x, y))
+
+        # Atajo Teclado
+        pygame.draw.rect(gameboard, "#3b2f2f", (x - 8, y - 8, 22, 22), border_radius=4)
+        pygame.draw.rect(gameboard, "#d2b48c", (x - 8, y - 8, 22, 22), 2, border_radius=4)
+        key_surf = ui_font_small.render(key_text.upper(), True, "white")
+        gameboard.blit(key_surf, (x - 1, y - 5))
+
+        if cost is not None:
+            draw_ribbon(gameboard, x - 5, y + size + 2, 60, 25, ribbon_sheet)
+            cost_surf = ui_font_small.render(f"{cost} G", True, "black")
+            gameboard.blit(cost_surf, (x + 25 - cost_surf.get_width() // 2, y + size + 7))
+
+
+    # Torres
+    tower_costs = [18, 25, 29, 33]
+    for i in range(4):
+        slot_x = rx + 15 + (i * 65)
+        cost = tower_costs[i] if i < len(unlocked_towers_order) else None
+        key_name = pygame.key.name(controls[f"slot_{i + 1}"])
+        draw_slot(slot_x, 50, 50, key_name, cost)
+
+    # Pasivas
+    for i in range(4):
+        slot_x = rx + 15 + (i * 65)
+        gameboard.blit(pygame.transform.scale(btn_small_img, (50, 50)), (slot_x, 150))
+
+    # Muro y Oro
+    wall_key = pygame.key.name(controls["wall"])
+    draw_slot(rx + 15, 250, 50, wall_key, 5)
+
+    draw_ribbon(gameboard, rx + 100, 260, 140, 40, ribbon_sheet)
+    gold_surf = ui_font_large.render(f"{player_gold} G", True, "black")
+    gameboard.blit(gold_surf, (rx + 170 - gold_surf.get_width() // 2, 265))
+
+
+    def draw_action_btn(x, y, w, h, key_text, label, cost=None):
+        # El botón ancho se dibuja protegiendo sus bordes con 9-slice
+        draw_9_slice_button(gameboard, btn_wide_img, pygame.Rect(x, y, w, h), edge_px=6)
+
+        pygame.draw.rect(gameboard, "#3b2f2f", (x - 10, y - 10, 26, 26), border_radius=4)
+        pygame.draw.rect(gameboard, "#d2b48c", (x - 10, y - 10, 26, 26), 2, border_radius=4)
+        key_surf = ui_font_medium.render(key_text.upper(), True, "white")
+        gameboard.blit(key_surf, (x - 3, y - 8))
+
+        label_surf = ui_font_large.render(label, True, "black")
+        # Centramos el texto dentro del botón
+        gameboard.blit(label_surf, (x + (w // 2) - (label_surf.get_width() // 2), y + 8))
+
+        if cost is not None:
+            draw_ribbon(gameboard, x + w - 85, y + h - 30, 75, 30, ribbon_sheet)
+            cost_surf = ui_font_medium.render(str(cost), True, "black")
+            gameboard.blit(cost_surf, (x + w - 47 - cost_surf.get_width() // 2, y + h - 25))
+
+
+    repair_all_cost = int((castle_max_hp - castle_hp) * 2)
+    sell_key = pygame.key.name(controls["sell"])
+
+    draw_action_btn(rx + 30, 360, 220, 45, sell_key, "Demolish")
+    draw_action_btn(rx + 30, 450, 220, 45, "e", "Repair")
+    draw_action_btn(rx + 30, 540, 220, 45, "r", "Repair All", repair_all_cost)
+
     if game_state == "LEVEL_UP":
         overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
@@ -561,8 +723,8 @@ while running:
         start_y = 200
 
         card_rects = []
-        title_text = ui_font.render("¡SUBIDA DE NIVEL! ELIGE RECOMPENSA", True, "yellow")
-        gameboard.blit(title_text, (offsetX + 150, 100))
+        title_text = ui_font_large.render("LEVEL UP! CHOOSE A REWARD", True, "yellow")
+        gameboard.blit(title_text, (640 - title_text.get_width() // 2, 100))
 
         for i, card in enumerate(level_up_options):
             cx = start_x + i * (card_width + spacing)
@@ -573,7 +735,7 @@ while running:
             pygame.draw.rect(gameboard, "#112233", rect)
             pygame.draw.rect(gameboard, "white", rect, 3)
 
-            text_surf = ui_font.render(card["title"], True, "white")
+            text_surf = ui_font_medium.render(card["title"], True, "white")
             gameboard.blit(text_surf, (cx + 10, cy + 130))
 
     screensize = screen.get_size()
@@ -602,8 +764,7 @@ while running:
         for enemy, others in collisions.items():
             push_final = pygame.math.Vector2(0, 0)
             for other in others:
-                if other == enemy:
-                    continue
+                if other == enemy: continue
                 distance = enemy.pos.distance_to(other.pos)
                 if distance < (enemy.radius + other.radius):
                     if distance == 0:
@@ -626,7 +787,6 @@ while running:
         bullet_group.update(dt * time_scale)
         effects_group.update(dt * time_scale)
 
-        # Choque de proyectiles contra la montaña
         for bullet in bullet_group:
             bx = int((bullet.pos.x - offsetX) // grid_size)
             by = int(bullet.pos.y // grid_size)
@@ -638,7 +798,6 @@ while running:
                         effects_group.add(exp)
                     bullet.kill()
 
-        # ÚNICO BUCLE DE COLISIONES
         hits = pygame.sprite.groupcollide(bullet_group, enemy_group, False, False)
 
         for arrow, enemies_hit in hits.items():
@@ -648,12 +807,10 @@ while running:
                     final_damage = arrow.damage * (1.0 + global_damage_buff)
 
                     if hasattr(arrow, "aoe_radius"):
-                        # Genera la animación de la explosión
                         exp = Effect(arrow.rect.centerx, arrow.rect.centery, explosion_sheet,
-                                     int(arrow.aoe_radius * 2.5), fps=20)
+                                     int(arrow.aoe_radius * 3.5), fps=20)
                         effects_group.add(exp)
 
-                        # Aplica daño en área
                         for e in enemy_group:
                             if pygame.math.Vector2(arrow.rect.center).distance_to(e.pos) <= arrow.aoe_radius:
                                 e.take_damage(final_damage)
