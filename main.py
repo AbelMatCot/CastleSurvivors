@@ -2,9 +2,11 @@ import pygame
 import random
 import configparser
 import os
+import sys
+
 
 from Entities.Player.castle import ArrowCastle, FireballCastle, KunaiCastle, LaserCastle
-from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower
+from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, TOWER_STATS
 from Entities.spawn import Spawn
 from Entities.effects import Effect
 
@@ -132,10 +134,11 @@ def setup_spawn_point(spawn_group, spawn_type="balanced"):
     center = 0
 
     while not valid_pos and attempts < 50:
-        center = random.randint(margin, col - margin - 1)
+        # random.randint incluye ambos extremos. 2 evita la esquina (0) y su adyacente (1).
+        center = random.randint(2, col - 3)
         conflict = False
         for pos in existing_spawns_pos[side]:
-            if abs(center - pos) <= 1:
+            if abs(center - pos) <= 2:
                 conflict = True
                 break
         if not conflict:
@@ -203,11 +206,10 @@ def get_tile_for_cell(col_idx, row_idx, target_types, tile_dict, oob_is_target=T
 
 
 # =====================================================================
-# --- MOTOR DE UI A PRUEBA DE BALAS ---
+# --- MOTOR DE UI ---
 # =====================================================================
 
 def extract_sprite(sheet, col, row, cols_total, rows_total):
-    """Corta un bloque de la hoja y elimina mágicamente los espacios transparentes"""
     w = sheet.get_width() // cols_total
     h = sheet.get_height() // rows_total
     sub = sheet.subsurface((col * w, row * h, w, h))
@@ -218,13 +220,11 @@ def extract_sprite(sheet, col, row, cols_total, rows_total):
 
 
 def draw_paper(surface, sheet, rect):
-    """Dibuja el papel especial usando 9 partes, protegiendo las esquinas"""
     parts = [extract_sprite(sheet, c, r, 3, 3) for r in range(3) for c in range(3)]
     tl, tc, tr = parts[0], parts[1], parts[2]
     ml, mc, mr = parts[3], parts[4], parts[5]
     bl, bc, br = parts[6], parts[7], parts[8]
 
-    # Hacemos las esquinas x2 más grandes para que luzcan bien, pero las limitamos para evitar overlapping
     scale = 2
     cw, ch = tl.get_width() * scale, tl.get_height() * scale
     cw = min(cw, rect.width // 2)
@@ -251,7 +251,6 @@ def draw_paper(surface, sheet, rect):
 
 
 def draw_9_slice_button(surface, image, rect, edge_px=8):
-    """Estira el botón sin deformar sus bordes reales"""
     w, h = image.get_size()
     e_x = min(edge_px, w // 2 - 1, rect.width // 2)
     e_y = min(edge_px, h // 2 - 1, rect.height // 2)
@@ -281,7 +280,6 @@ def draw_9_slice_button(surface, image, rect, edge_px=8):
 
 
 def draw_bar(surface, x, y, w, h, ratio, base_sheet, fill_sheet):
-    """Dibuja barras extrayendo limpiamente sus 3 partes para que nunca se deformen"""
     left = extract_sprite(base_sheet, 0, 0, 3, 1)
     mid = extract_sprite(base_sheet, 1, 0, 3, 1)
     right = extract_sprite(base_sheet, 2, 0, 3, 1)
@@ -304,11 +302,10 @@ def draw_bar(surface, x, y, w, h, ratio, base_sheet, fill_sheet):
         surface.blit(pygame.transform.scale(fill_crop, (fill_w, inner_h)), (x + pad_x, y + pad_y))
 
 
-def draw_ribbon(surface, x, y, w, h, sheet):
-    """Crea lazos cortando limpiamente la fila superior"""
-    left = extract_sprite(sheet, 0, 0, 3, 2)
-    mid = extract_sprite(sheet, 1, 0, 3, 2)
-    right = extract_sprite(sheet, 2, 0, 3, 2)
+def draw_ribbon(surface, x, y, w, h, sheet, row=0):
+    left = extract_sprite(sheet, 0, row, 3, 2)
+    mid = extract_sprite(sheet, 1, row, 3, 2)
+    right = extract_sprite(sheet, 2, row, 3, 2)
 
     edge_w = min(w // 2, int(h * (left.get_width() / left.get_height())))
     mid_w = max(0, w - (edge_w * 2))
@@ -317,9 +314,6 @@ def draw_ribbon(surface, x, y, w, h, sheet):
     if mid_w > 0:
         surface.blit(pygame.transform.scale(mid, (mid_w, h)), (x + edge_w, y))
     surface.blit(pygame.transform.scale(right, (edge_w, h)), (x + edge_w + mid_w, y))
-
-
-# =====================================================================
 
 
 # --- INICIALIZACIÓN DE PYGAME ---
@@ -342,7 +336,7 @@ try:
 except FileNotFoundError:
     print("ERROR: Faltan las texturas de terreno en la carpeta Assets.")
     pygame.quit()
-    exit()
+    sys.exit()
 
 effects_group = pygame.sprite.Group()
 explosion_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "Explosion_01.png")).convert_alpha()
@@ -360,11 +354,10 @@ try:
 except FileNotFoundError as e:
     print(f"ERROR UI: No se encontró la imagen {e}. Revisa Assets/UI")
     pygame.quit()
-    exit()
+    sys.exit()
 
-# Extraemos los botones exactos de la hoja con nuestra función mágica (Cero espacios transparentes)
-btn_small_img = extract_sprite(btn_sheet, 0, 0, 2, 3)  # Arriba Izq
-btn_wide_img = extract_sprite(btn_sheet, 0, 1, 2, 3)  # Medio Izq
+btn_small_img = extract_sprite(btn_sheet, 0, 0, 2, 3)
+btn_wide_img = extract_sprite(btn_sheet, 0, 1, 2, 3)
 
 background_tile = get_tile(color4_sheet, 64, 64, 64, 64, grid_size)
 buildable_tiles = {
@@ -503,28 +496,27 @@ while running:
                             structures_hp[(hoverRow, hoverCol)] = 150
                     elif current_tool in ["arrow", "fireball", "kunai", "laser"]:
                         lvl = tower_levels[current_tool]
-                        current_count = sum(1 for t in player_group if
-                                            type(t).__name__.lower().startswith(current_tool) and "castle" not in type(
-                                                t).__name__.lower())
+                        stats = TOWER_STATS[current_tool][max(1, lvl)]
+                        current_count = sum(1 for t in player_group if type(t).__name__.lower().startswith(
+                            current_tool) and "castle" not in type(t).__name__.lower())
 
-                        if current_count < tower_limits[current_tool][lvl]:
-                            costs = {"arrow": 18, "fireball": 25, "kunai": 29, "laser": 33}
-                            cost = costs[current_tool]
-                            if player_gold >= cost:
-                                player_gold -= cost
-                                grid[hoverRow][hoverCol] = turret
-                                structures_hp[(hoverRow, hoverCol)] = 80
-                                posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
-                                posY_px = (hoverRow * grid_size) + (grid_size // 2)
+                    if current_count < stats["limit"]:
+                        cost = stats["cost"]
+                        if player_gold >= cost:
+                            player_gold -= cost
+                            grid[hoverRow][hoverCol] = turret
+                            structures_hp[(hoverRow, hoverCol)] = 80
+                            posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
+                            posY_px = (hoverRow * grid_size) + (grid_size // 2)
 
-                                if current_tool == "arrow":
-                                    player_group.add(ArrowTower(posX_px, posY_px))
-                                elif current_tool == "fireball":
-                                    player_group.add(FireballTower(posX_px, posY_px))
-                                elif current_tool == "kunai":
-                                    player_group.add(KunaiTower(posX_px, posY_px))
-                                elif current_tool == "laser":
-                                    player_group.add(LaserTower(posX_px, posY_px))
+                            if current_tool == "arrow":
+                                player_group.add(ArrowTower(posX_px, posY_px))
+                            elif current_tool == "fireball":
+                                player_group.add(FireballTower(posX_px, posY_px))
+                            elif current_tool == "kunai":
+                                player_group.add(KunaiTower(posX_px, posY_px))
+                            elif current_tool == "laser":
+                                player_group.add(LaserTower(posX_px, posY_px))
 
         if event.type == pygame.KEYDOWN:
             if game_state == "PLAYING":
@@ -611,19 +603,21 @@ while running:
     bullet_group.draw(gameboard)
     effects_group.draw(gameboard)
 
+    # El rayo láser se dibuja solo si la torre dice que está disparando y tiene objetivo vivo
     for tower in player_group:
-        name = type(tower).__name__.lower()
-        if "laser" in name and hasattr(tower, "target") and tower.target is not None:
-            start_pos = tower.rect.center
-            end_pos = tower.target.rect.center
-            pygame.draw.line(gameboard, (0, 191, 255), start_pos, end_pos, 3)
+        if getattr(tower, "is_firing", False) and getattr(tower, "target", None) is not None:
+            if tower.target.alive():
+                start_pos = tower.rect.center
+                end_pos = tower.target.rect.center
+                pygame.draw.line(gameboard, (0, 191, 255), start_pos, end_pos, 3)
+            else:
+                tower.is_firing = False
 
     # ==========================================
     # --- DIBUJADO DE LA INTERFAZ DE USUARIO ---
     # ==========================================
 
     # ================= PANEL IZQUIERDO =================
-    # Reloj (Usando SpecialPaper EXCLUSIVAMENTE aquí)
     clock_rect = pygame.Rect(75, 40, 120, 60)
     draw_paper(gameboard, special_paper_sheet, clock_rect)
 
@@ -632,7 +626,6 @@ while running:
     gameboard.blit(time_surf,
                    (clock_rect.centerx - time_surf.get_width() // 2, clock_rect.centery - time_surf.get_height() // 2))
 
-    # Barras de Estado (Extraídas mágicamente para evitar fallos de recorte)
     hp_ratio = max(0, castle_hp / castle_max_hp)
     draw_bar(gameboard, 25, 140, 220, 35, hp_ratio, big_bar_base, big_bar_fill)
     hp_text = ui_font_medium.render(f"HP: {int(castle_hp)}/{castle_max_hp}", True, "white")
@@ -648,68 +641,79 @@ while running:
 
 
     def draw_slot(x, y, size, key_text, cost=None):
-        # Botón extraído al vuelo escalado al cuadrado que toque
         gameboard.blit(pygame.transform.scale(btn_small_img, (size, size)), (x, y))
 
-        # Atajo Teclado
         pygame.draw.rect(gameboard, "#3b2f2f", (x - 8, y - 8, 22, 22), border_radius=4)
         pygame.draw.rect(gameboard, "#d2b48c", (x - 8, y - 8, 22, 22), 2, border_radius=4)
         key_surf = ui_font_small.render(key_text.upper(), True, "white")
         gameboard.blit(key_surf, (x - 1, y - 5))
 
+        # DIBUJAMOS EL LAZO SIEMPRE (aunque no haya torre desbloqueada)
+        draw_ribbon(gameboard, x - 5, y + size + 2, 60, 25, ribbon_sheet, row=1)
+
+        # Si hay coste, ponemos el texto encima
         if cost is not None:
-            draw_ribbon(gameboard, x - 5, y + size + 2, 60, 25, ribbon_sheet)
             cost_surf = ui_font_small.render(f"{cost} G", True, "black")
             gameboard.blit(cost_surf, (x + 25 - cost_surf.get_width() // 2, y + size + 7))
 
 
-    # Torres
     tower_costs = [18, 25, 29, 33]
+    tower_ids = ["arrow", "fireball", "kunai", "laser"]
+    # Torres
     for i in range(4):
         slot_x = rx + 15 + (i * 65)
-        cost = tower_costs[i] if i < len(unlocked_towers_order) else None
         key_name = pygame.key.name(controls[f"slot_{i + 1}"])
-        draw_slot(slot_x, 50, 50, key_name, cost)
 
-    # Pasivas
+        # Leemos del orden real de desbloqueo
+        if i < len(unlocked_towers_order):
+            t_id = unlocked_towers_order[i]
+            lvl = tower_levels[t_id]
+            cost = TOWER_STATS[t_id][max(1, lvl)]["cost"]
+            draw_slot(slot_x, 50, 50, key_name, cost)
+        else:
+            # Si el slot aún no tiene torre desbloqueada, lo dibujamos sin coste
+            draw_slot(slot_x, 50, 50, key_name, None)
+
     for i in range(4):
         slot_x = rx + 15 + (i * 65)
         gameboard.blit(pygame.transform.scale(btn_small_img, (50, 50)), (slot_x, 150))
 
-    # Muro y Oro
     wall_key = pygame.key.name(controls["wall"])
     draw_slot(rx + 15, 250, 50, wall_key, 5)
 
-    draw_ribbon(gameboard, rx + 100, 260, 140, 40, ribbon_sheet)
+    draw_ribbon(gameboard, rx + 100, 260, 140, 40, ribbon_sheet, row=0)
     gold_surf = ui_font_large.render(f"{player_gold} G", True, "black")
     gameboard.blit(gold_surf, (rx + 170 - gold_surf.get_width() // 2, 265))
 
 
     def draw_action_btn(x, y, w, h, key_text, label, cost=None):
-        # El botón ancho se dibuja protegiendo sus bordes con 9-slice
-        draw_9_slice_button(gameboard, btn_wide_img, pygame.Rect(x, y, w, h), edge_px=6)
+        draw_9_slice_button(gameboard, btn_wide_img, pygame.Rect(x, y, w, h), edge_px=14)
 
         pygame.draw.rect(gameboard, "#3b2f2f", (x - 10, y - 10, 26, 26), border_radius=4)
         pygame.draw.rect(gameboard, "#d2b48c", (x - 10, y - 10, 26, 26), 2, border_radius=4)
         key_surf = ui_font_medium.render(key_text.upper(), True, "white")
         gameboard.blit(key_surf, (x - 3, y - 8))
 
-        label_surf = ui_font_large.render(label, True, "black")
-        # Centramos el texto dentro del botón
-        gameboard.blit(label_surf, (x + (w // 2) - (label_surf.get_width() // 2), y + 8))
+        label_surf = ui_font_medium.render(label, True, "black")
+        gameboard.blit(label_surf,
+                       (x + (w // 2) - (label_surf.get_width() // 2), y + (h // 2) - (label_surf.get_height() // 2)))
 
         if cost is not None:
-            draw_ribbon(gameboard, x + w - 85, y + h - 30, 75, 30, ribbon_sheet)
-            cost_surf = ui_font_medium.render(str(cost), True, "black")
-            gameboard.blit(cost_surf, (x + w - 47 - cost_surf.get_width() // 2, y + h - 25))
+            ry = y + h + 2
+            rw = 80
+            rh = 28
+            rx_ribbon = x + (w // 2) - (rw // 2)
+            draw_ribbon(gameboard, rx_ribbon, ry, rw, rh, ribbon_sheet, row=0)
+            cost_surf = ui_font_small.render(f"{cost} G", True, "black")
+            gameboard.blit(cost_surf, (rx_ribbon + (rw // 2) - (cost_surf.get_width() // 2), ry + 6))
 
 
     repair_all_cost = int((castle_max_hp - castle_hp) * 2)
     sell_key = pygame.key.name(controls["sell"])
 
-    draw_action_btn(rx + 30, 360, 220, 45, sell_key, "Demolish")
-    draw_action_btn(rx + 30, 450, 220, 45, "e", "Repair")
-    draw_action_btn(rx + 30, 540, 220, 45, "r", "Repair All", repair_all_cost)
+    draw_action_btn(rx + 40, 420, 200, 50, sell_key, "Demolish")
+    draw_action_btn(rx + 40, 510, 200, 50, "e", "Repair")
+    draw_action_btn(rx + 40, 600, 200, 50, "r", "Repair All", repair_all_cost)
 
     if game_state == "LEVEL_UP":
         overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
@@ -783,7 +787,7 @@ while running:
                     enemy.pos += push_final.normalize() * 40.0 * dt
             enemy.rect.center = (round(enemy.pos.x), round(enemy.pos.y))
 
-        player_group.update(dt * time_scale, enemy_group, bullet_group)
+        player_group.update(dt * time_scale, enemy_group, bullet_group, tower_levels)
         bullet_group.update(dt * time_scale)
         effects_group.update(dt * time_scale)
 
