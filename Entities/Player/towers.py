@@ -80,10 +80,20 @@ class Tower(pygame.sprite.Sprite):
         self.x = x
         self.y = y
 
-    def update(self, dt, enemy_group, bullet_group, tower_levels):
-        # Leemos las stats dinámicamente cada frame
+    def update(self, dt, enemy_group, bullet_group, tower_levels, passive_levels):
         level = max(1, tower_levels.get(self.tower_id, 1))
-        stats = TOWER_STATS[self.tower_id][level]
+        original_stats = TOWER_STATS[self.tower_id][level]
+
+        # Clonamos el diccionario para no sobreescribir los stats base
+        stats = original_stats.copy()
+
+        # --- PASIVAS: Cadencia y Rango/Área ---
+        stats["cd"] = original_stats["cd"] * (1.0 - (passive_levels.get("firerate", 0) * 0.05))
+
+        range_buff = 1.0 + (passive_levels.get("range", 0) * 0.05)
+        stats["range"] = original_stats["range"] * range_buff
+        if "area" in stats:
+            stats["area"] = original_stats["area"] * range_buff
 
         self.shoot_cooldown = stats["cd"]
         self.range = stats["range"]

@@ -24,12 +24,31 @@ class Enemy(pygame.sprite.Sprite):
         self.slow_timer = 0.0
         self.health = health
 
+        self.grid_size = grid_size
+        self.offset_x = offset_x
+
+        # Añadimos las torres (8) a los objetivos
+        self.target_cells = (2, 3, 8)
+
+        # --- AUTO-DETECCIÓN DE TÚNEL ARREGLADA ---
+        # Usamos directamente las variables locales offset_x y grid_size
+        grid_x_start = (self.pos.x - offset_x) / grid_size
+        grid_y_start = self.pos.y / grid_size
+
+        # Los enemigos nacen en el centro de la casilla (0.5 o 23.5)
+        # Comprobamos con margen de 1.0 para que no falle la detección
+        if grid_y_start < 1.0:
+            self.tunnel_dir = pygame.math.Vector2(0, 1)  # Viene del Norte
+        elif grid_y_start > 22.0:
+            self.tunnel_dir = pygame.math.Vector2(0, -1)  # Viene del Sur
+        elif grid_x_start < 1.0:
+            self.tunnel_dir = pygame.math.Vector2(1, 0)  # Viene del Oeste
+        else:
+            self.tunnel_dir = pygame.math.Vector2(-1, 0)  # Viene del Este
+
         self.attack_timer = 0.0
         self.attack_cooldown = 1.0
         self.wall_damage_counter = 0
-
-        self.grid_size = grid_size
-        self.offset_x = offset_x
 
         # Temporizador para el flash de daño
         self.flash_timer = 0.0
@@ -38,7 +57,6 @@ class Enemy(pygame.sprite.Sprite):
         # Variables públicas para que main.py pueda calcular los empujones
         self.is_attacking = False
         self.dir_norm = pygame.math.Vector2(1, 0)
-        self.target_cells = (2, 3)  # Por defecto, chocan con muros (2) y castillo (3)
 
     def take_damage(self, amount):
         self.health -= amount
@@ -51,7 +69,7 @@ class Enemy(pygame.sprite.Sprite):
         self.speed = self.base_speed * factor
         self.slow_timer = duration
 
-    def update(self, dt, grid, enemy_group=None, structures_hp=None):
+    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
 
         if self.slow_timer > 0:
             self.slow_timer -= dt
@@ -66,23 +84,22 @@ class Enemy(pygame.sprite.Sprite):
                 self.image.fill((0, 0, 0, 0))
                 pygame.draw.circle(self.image, self.base_color, (self.radius, self.radius), self.radius)
 
-        # 2. DIRECCIÓN (Lógica de Túnel + Centro) - ¡AQUÍ ESTÁ EL CAMBIO!
-        margin = 4
-        # Calculamos su posición exacta en la matriz con decimales
+        # 2. DIRECCIÓN (Lógica de Túnel + Centro)
+        margin = 1
         grid_x_exact = (self.pos.x - self.offset_x) / self.grid_size
         grid_y_exact = self.pos.y / self.grid_size
 
-        # Forzamos línea recta hasta que estén medio bloque dentro de la zona verde (+0.5)
-        if grid_x_exact < margin + 0.5:
-            self.dir_norm = pygame.math.Vector2(1, 0)  # Vienen del Oeste, van al Este
-        elif grid_x_exact > 24 - margin - 0.5:
-            self.dir_norm = pygame.math.Vector2(-1, 0)  # Vienen del Este, van al Oeste
-        elif grid_y_exact < margin + 0.5:
-            self.dir_norm = pygame.math.Vector2(0, 1)  # Vienen del Norte, van al Sur
-        elif grid_y_exact > 24 - margin - 0.5:
-            self.dir_norm = pygame.math.Vector2(0, -1)  # Vienen del Sur, van al Norte
+        # Forzamos la dirección del túnel hasta que estén medio bloque dentro
+        if self.tunnel_dir.y == 1 and grid_y_exact < margin + 0.5:
+            self.dir_norm = self.tunnel_dir
+        elif self.tunnel_dir.y == -1 and grid_y_exact > 24 - margin - 0.5:
+            self.dir_norm = self.tunnel_dir
+        elif self.tunnel_dir.x == 1 and grid_x_exact < margin + 0.5:
+            self.dir_norm = self.tunnel_dir
+        elif self.tunnel_dir.x == -1 and grid_x_exact > 24 - margin - 0.5:
+            self.dir_norm = self.tunnel_dir
         else:
-            # Una vez están a salvo dentro de la zona jugable, apuntan al castillo
+            # Una vez están a salvo, a por el castillo
             center_vec = pygame.math.Vector2(640, 360)
             direction = center_vec - self.pos
             if direction.length() != 0:
@@ -104,16 +121,27 @@ class Enemy(pygame.sprite.Sprite):
                 if self.attack_timer >= self.attack_cooldown:
                     self.attack_timer = 0.0
 
+                    # --- PASIVAS: Armadura ---
+                    armor_lvl = passive_levels.get("armor", 0) if passive_levels else 0
+                    damage_reduction = 1.0 - (armor_lvl * 0.05)
+                    final_damage = max(1, int(self.base_damage * damage_reduction))
+
                     if cell in (2, 8) and structures_hp is not None:
                         coords = (grid_y, grid_x)
                         if coords in structures_hp:
-                            structures_hp[coords] -= self.base_damage
+                            structures_hp[coords] -= final_damage
                             if structures_hp[coords] <= 0:
                                 grid[grid_y][grid_x] = 0  # Se destruye el muro/torre
                                 del structures_hp[coords]
 
                     elif cell == 3:
-                        print(f"¡El castillo sufre {self.base_damage} de daño!")
+                        # Aquí luego habrá que restar la vida al castillo en main.py
+                        print(f"¡El castillo sufre {final_damage} de daño!")
+
+                    # --- PASIVAS: Espinas ---
+                    thorns_lvl = passive_levels.get("thorns", 0) if passive_levels else 0
+                    if thorns_lvl > 0 and thorns_values:
+                        self.take_damage(thorns_values[thorns_lvl])
 
         # 4. AVANZAR
         if not self.is_attacking:
@@ -162,7 +190,7 @@ class Generator(Enemy):
 class Swarmer(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
         # 2 HP: Muere de una sola caricia de cualquier torre
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=2, speed=75.0, color="pink", radius=4, xp_value=0, gold_value=0, base_damage=2)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=3, speed=75.0, color="pink", radius=4, xp_value=0, gold_value=0, base_damage=3)
 
 class Shooter(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
