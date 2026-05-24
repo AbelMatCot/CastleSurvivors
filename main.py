@@ -4,9 +4,7 @@ import configparser
 import os
 import sys
 
-
-from Entities.Player.castle import ArrowCastle, FireballCastle, KunaiCastle, LaserCastle
-from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, TOWER_STATS
+from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, LightningTower, ThornsTower, TOWER_STATS
 from Entities.spawn import Spawn
 from Entities.effects import Effect
 
@@ -54,8 +52,8 @@ else:
 def get_key(key_str):
     return getattr(pygame, f"K_{key_str.lower()}")
 
-controls = {
 
+controls = {
     "slot_1": get_key(config["Keybinds"]["slot_1"]),
     "slot_2": get_key(config["Keybinds"]["slot_2"]),
     "slot_3": get_key(config["Keybinds"]["slot_3"]),
@@ -66,37 +64,103 @@ controls = {
     "repair_all": get_key(config["Keybinds"]["repair_all"])
 }
 
-
 # --- VARIABLES GLOBALES Y ESTADOS ---
 current_tool = None
 game_state = "PLAYING"
-unlocked_towers = ["arrow"] # El inventario global
-active_towers = ["arrow", None, None, None] # Los 4 slots de tu interfaz
+unlocked_towers = ["arrow"]  # El inventario global
+active_towers = ["arrow", None, None, None]  # Los 4 slots de tu interfaz
 level_up_options = []
 card_rects = []
 pause_rects = []
 TOWER_BASE_HP = [0, 50, 55, 65, 80, 100, 125, 150, 200]
 
-
-meta_health = 0 #TODO hacer la metaprogresion y quitar esta cosa
+meta_health = 0  # TODO hacer la metaprogresion
 
 pygame.font.init()
 ui_font_large = pygame.font.SysFont("Arial", 28, bold=True)
 ui_font_medium = pygame.font.SysFont("Arial", 20, bold=True)
 ui_font_small = pygame.font.SysFont("Arial", 14, bold=True)
 
+# --- NOMBRES Y DESCRIPCIONES PARA LAS TARJETAS ---
+UI_TOWER_NAMES = {
+    "arrow": "Archer Tower",
+    "fireball": "Fireball",
+    "kunai": "Kunai Volley",
+    "laser": "Ice Beam",
+    "lightning": "Chain Lightning",
+    "thorns": "Thorns Ground"
+}
+
+TOWER_DESCRIPTIONS = {
+    "arrow": {
+        1: "High range and firerate. Arrows can penetrate enemies at higher levels.",
+        2: "Damage increased.", 3: "Firerate increased. Tower limit increased.",
+        4: "Now arrows can penetrate one enemy.", 5: "Damage increased. Tower limit increased.",
+        6: "Firerate increased.", 7: "Arrows can penetrate two enemies. Tower limit increased.",
+        8: "Range, damage and firerate greatly increased."
+    },
+    "fireball": {
+        1: "High damage, low firerate. Projectiles explode dealing damage in an area.",
+        2: "Damage increased.", 3: "Firerate increased. Area increased.",
+        4: "Damage increased. Tower limit increased.", 5: "Range increased. Firerate increased.",
+        6: "Damage increased. Area increased.", 7: "Tower limit increased.",
+        8: "Range, damage, firerate and area greatly increased."
+    },
+    "kunai": {
+        1: "High firerate. Shoots multiple projectiles at higher levels.",
+        2: "Firerate increased.", 3: "Number of projectiles increased.",
+        4: "Damage increased. Tower limit increased.", 5: "Number of projectiles increased.",
+        6: "Range increased. Firerate increased.", 7: "Tower limit increased.",
+        8: "Range, damage, firerate and number of projectiles greatly increased."
+    },
+    "laser": {
+        1: "Low damage, but slows enemies down.",
+        2: "Damage increased.", 3: "Range increased. Slow increased.",
+        4: "Damage increased. Tower limit increased.", 5: "Range increased. Slow increased.",
+        6: "Damage increased.", 7: "Tower limit increased.",
+        8: "Range, damage and slow greatly increased."
+    },
+    "lightning": {
+        1: "High firerate, low damage. Projectiles bounce between enemies.",
+        2: "Damage increased.", 3: "Firerate increased.",
+        4: "Bounces increased. Tower limit increased.", 5: "Damage increased.",
+        6: "Bounces increased. Firerate increased.", 7: "Tower limit increased.",
+        8: "Range, damage, firerate and bounces greatly increased."
+    },
+    "thorns": {
+        1: "Spawns a thorny patch under enemies that deals damage over time.",
+        2: "Damage increased.", 3: "Patch area and maximum target limit increased.",
+        4: "Damage and tower limit increased. Range slightly increased.",
+        5: "Patch attack speed increased. Max target limit increased.",
+        6: "Damage and patch area increased.", 7: "Range and tower limit increased. Max target limit increased.",
+        8: "High damage, large area and extremely fast tick rate."
+    }
+}
+
+PASSIVE_DESCRIPTIONS = {
+    "damage": "Increases the damage of all your towers by 5% per level.",
+    "firerate": "Increases the attack speed of all your towers by 5% per level.",
+    "range": "Increases the range and area of effect of your towers by 5% per level.",
+    "health": "Increases Castle and Wall maximum health by 5% per level.",
+    "regen": "Regenerates 1% of Castle health per second per level.",
+    "armor": "Reduces incoming damage to Castle and Walls by 5% per level.",
+    "thorns": "Enemies taking damage from walls or castle take damage back.",
+    "gold": "Increases gold earned from enemies by 5% per level.",
+    "xp": "Increases experience earned from enemies by 5% per level.",
+    "crit": "10% chance per level to deal 150% damage."
+}
+
 # --- DIRECTOR DE SPAWNS (ESTILO VAMPIRE SURVIVORS) ---
 ENEMY_WEIGHTS = {
-    "Basic": 1.0, "Fast": 1.0, "Swarmer": 0.5, # El Swarmer pesa 0 porque lo suelta el Generator
+    "Basic": 1.0, "Fast": 1.0, "Swarmer": 0.5,
     "Shooter": 2.0, "Flyer": 2.0, "Tank": 4.0, "Generator": 15.0
 }
 
-# La ruleta: {Minuto: {"Enemigo": Probabilidad}}
 WAVE_POOLS = {
-    0:  {"Basic": 100},
-    2:  {"Basic": 70, "Fast": 30},
-    5:  {"Basic": 50, "Fast": 30, "Shooter": 20},
-    8:  {"Basic": 40, "Fast": 20, "Shooter": 20, "Tank": 20},
+    0: {"Basic": 100},
+    2: {"Basic": 70, "Fast": 30},
+    5: {"Basic": 50, "Fast": 30, "Shooter": 20},
+    8: {"Basic": 40, "Fast": 20, "Shooter": 20, "Tank": 20},
     12: {"Basic": 30, "Fast": 15, "Shooter": 20, "Tank": 20, "Flyer": 15},
     15: {"Basic": 20, "Fast": 15, "Shooter": 15, "Tank": 25, "Flyer": 15, "Generator": 10}
 }
@@ -113,22 +177,23 @@ castle_max_hp = 100
 castle_hp = castle_max_hp
 structures_hp = {}
 
-tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0}
+tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
 tower_limits = {
     "arrow": [0, 4, 4, 4, 5, 5, 5, 6, 6],
     "fireball": [0, 2, 2, 2, 3, 3, 3, 4, 4],
     "kunai": [0, 2, 2, 2, 3, 3, 3, 4, 4],
-    "laser": [0, 2, 2, 2, 3, 3, 3, 4, 4]
+    "laser": [0, 2, 2, 2, 3, 3, 3, 4, 4],
+    "lightning": [0, 3, 3, 3, 4, 4, 4, 5, 5],
+    "thorns": [0, 3, 3, 3, 4, 4, 4, 5, 5]
 }
 
 # --- SISTEMA DE PASIVAS (6 SLOTS, MAX LVL 4) ---
-active_passives = [] # Guardará los IDs de las pasivas que elijas
+active_passives = []
 passive_levels = {
     "damage": 0, "firerate": 0, "range": 0, "health": 0, "regen": 0,
     "armor": 0, "thorns": 0, "gold": 0, "xp": 0, "crit": 0
 }
 
-# La defensa plana no escala linealmente (+2, +2, +3, +3), así que usamos un array:
 THORNS_VALUES = [0, 2, 4, 7, 10]
 
 # --- LÓGICA DE SPAWNS AVANZADA Y CALENDARIO ---
@@ -187,7 +252,6 @@ def setup_spawn_point(spawn_group, spawn_type="balanced"):
     existing_spawns_pos[side].append(center)
     spawn_counts[side] += 1
 
-    # Taladramos SOLO la casilla exterior de la montaña
     if side == "North":
         spawn_x, spawn_y = center, -1
         grid[0][center] = margin
@@ -212,29 +276,35 @@ def setup_spawn_point(spawn_group, spawn_type="balanced"):
     new_spawn = Spawn(spawn_x, spawn_y)
     spawn_group.add(new_spawn)
 
-    # Patrón de explosión múltiple: Centro (0s), Izquierda (0.15s), Derecha-Abajo (0.3s)
     offsets = [(0, 0, 0.0), (-14, 8, 0.15), (14, 18, 0.3)]
-
     for ox, oy, dly in offsets:
         dust = Effect(fx_base + ox, fy_base + oy, dust_sheet, scale_size=60, fps=12, delay=dly)
         effects_group.add(dust)
 
+
 def get_level_up_cards():
     if player_level > 50:
         return [
-            {"title": "Curar Castillo 20%", "type": "heal_20"},
-            {"title": "Saco de Oro (+100)", "type": "gold_100"},
-            {"title": "Gemas (+5)", "type": "gems_5"}
+            {"title": "Curar Castillo 20%", "desc": "Restaura una gran cantidad de vida perdida.", "type": "heal_20"},
+            {"title": "Saco de Oro (+100)", "desc": "Un gran empujón para tu economía.", "type": "gold_100"},
+            {"title": "Gemas (+5)", "desc": "Útiles para la meta-progresión.", "type": "gems_5"}
         ]
     pool = []
 
     # --- 1. Cartas de Torres ---
-    for t_id in ["arrow", "fireball", "kunai", "laser"]:
+    has_free_slot = None in active_towers
+
+    for t_id in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
         lvl = tower_levels[t_id]
+        name = UI_TOWER_NAMES[t_id]
         if lvl == 0:
-            pool.append({"title": f"Unlock {t_id.capitalize()}", "type": "upgrade_tower", "id": t_id})
+            if has_free_slot:
+                pool.append(
+                    {"title": f"Unlock {name}", "desc": TOWER_DESCRIPTIONS[t_id][1], "type": "upgrade_tower",
+                     "id": t_id})
         elif lvl < 8:
-            pool.append({"title": f"Upgrade {t_id.capitalize()} (Lvl{lvl + 1})", "type": "upgrade_tower", "id": t_id})
+            pool.append({"title": f"Upgrade {name} (Lvl{lvl + 1})", "desc": TOWER_DESCRIPTIONS[t_id][lvl + 1],
+                         "type": "upgrade_tower", "id": t_id})
 
     # --- 2. Cartas de Pasivas ---
     passive_names = {
@@ -245,18 +315,17 @@ def get_level_up_cards():
 
     for p_id, lvl in passive_levels.items():
         if lvl == 0:
-            # Solo ofrecemos pasivas NUEVAS si quedan huecos libres
             if len(active_passives) < 6:
-                pool.append({"title": f"Pasiva: {passive_names[p_id]}", "type": "unlock_passive", "id": p_id})
+                pool.append({"title": f"Pasiva: {passive_names[p_id]}", "desc": PASSIVE_DESCRIPTIONS[p_id],
+                             "type": "unlock_passive", "id": p_id})
         elif lvl < 4:
-            # Si ya está desbloqueada, permitimos subirla hasta lvl 4
             pool.append(
-                {"title": f"Mejora: {passive_names[p_id]} (Lvl{lvl + 1})", "type": "upgrade_passive", "id": p_id})
+                {"title": f"Mejora: {passive_names[p_id]} (Lvl{lvl + 1})", "desc": PASSIVE_DESCRIPTIONS[p_id],
+                 "type": "upgrade_passive", "id": p_id})
 
     random.shuffle(pool)
     cards = pool[:3]
 
-    # Cartas de emergencia por si has maxeado todo
     fallbacks = [{"title": "Saco de Oro (+50)", "type": "gold"}, {"title": "Curar Castillo 50%", "type": "heal"}]
     while len(cards) < 3:
         cards.append(random.choice(fallbacks))
@@ -293,6 +362,27 @@ def extract_sprite(sheet, col, row, cols_total, rows_total, crop=True):
         if bounding.width > 0 and bounding.height > 0:
             return sub.subsurface(bounding)
     return sub
+
+
+def draw_text_wrapped(surface, text, font, color, rect):
+    words = text.split(' ')
+    lines = []
+    current_line = []
+    for word in words:
+        test_line = ' '.join(current_line + [word])
+        if font.size(test_line)[0] < rect.width:
+            current_line.append(word)
+        else:
+            lines.append(' '.join(current_line))
+            current_line = [word]
+    if current_line:
+        lines.append(' '.join(current_line))
+
+    y_offset = rect.y
+    for line in lines:
+        surf = font.render(line, True, color)
+        surface.blit(surf, (rect.x, y_offset))
+        y_offset += font.get_linesize()
 
 
 def draw_paper(surface, sheet, rect):
@@ -379,12 +469,10 @@ def draw_bar(surface, x, y, w, h, ratio, base_sheet, fill_sheet):
 
 
 def draw_ribbon(surface, x, y, w, h, sheet, row=0, rows_total=2):
-    # A los lazos SÍ los recortamos para quitarles el vacío transparente gigante
     left = extract_sprite(sheet, 0, row, 3, rows_total, crop=True)
     mid = extract_sprite(sheet, 1, row, 3, rows_total, crop=True)
     right = extract_sprite(sheet, 2, row, 3, rows_total, crop=True)
 
-    # Calculamos el ancho de los bordes manteniendo su proporción original
     edge_w_l = int(h * (left.get_width() / max(1, left.get_height())))
     edge_w_r = int(h * (right.get_width() / max(1, right.get_height())))
 
@@ -449,13 +537,13 @@ except FileNotFoundError:
     print("Aviso: No se encontró la imagen de teclas.")
     keys_sheet = None
 
-# Diccionario de teclas
 KEYMAP_COORDS = {
     "a": (0, 2), "b": (1, 2), "c": (2, 2), "d": (3, 2), "e": (4, 2), "f": (5, 2), "g": (6, 2), "h": (7, 2),
     "i": (0, 3), "j": (1, 3), "k": (2, 3), "l": (3, 3), "m": (4, 3), "n": (5, 3), "o": (6, 3), "p": (7, 3),
     "q": (0, 4), "r": (1, 4), "s": (2, 4), "t": (3, 4), "u": (4, 4), "v": (5, 4), "w": (6, 4), "x": (7, 4),
     "y": (0, 5), "z": (1, 5),
-    "1": (0, 7), "2": (1, 7), "3": (2, 7), "4": (3, 7), "5": (2, 4), "6": (4, 7), "7": (5, 7), "8": (6, 7), "9": (7, 7), "0": (6, 3),
+    "1": (0, 7), "2": (1, 7), "3": (2, 7), "4": (3, 7), "5": (2, 4), "6": (4, 7), "7": (5, 7), "8": (6, 7), "9": (7, 7),
+    "0": (6, 3),
     "esc": (5, 6),
     "up": (0, 0), "down": (1, 0), "left": (2, 0), "right": (3, 0),
     "f1": (4, 0), "f2": (5, 0), "f3": (6, 0), "f4": (7, 0),
@@ -519,7 +607,7 @@ enemy_group = pygame.sprite.Group()
 bullet_group = pygame.sprite.Group()
 spawn_group = pygame.sprite.Group()
 
-castle_obj = ArrowCastle(640, 360)
+castle_obj = ArrowTower(640, 360, is_castle=True)
 player_group.add(castle_obj)
 
 for _ in range(2):
@@ -533,12 +621,10 @@ difficulty_multiplier = 1.0
 def draw_slot(x, y, size, key_text, cost=None, is_pressed=False):
     img = btn_small_pressed_img if is_pressed else btn_small_img
 
-    # Reducimos el alto y lo dibujamos más abajo si está pulsado
     btn_y = y + 4 if is_pressed else y
     btn_h = size - 4 if is_pressed else size
     gameboard.blit(pygame.transform.scale(img, (size, btn_h)), (x, btn_y))
 
-    # El contenido baja 4 píxeles si está pulsado
     y_off = 4 if is_pressed else 0
 
     pygame.draw.rect(gameboard, "#3b2f2f", (x - 8, y - 8 + y_off, 22, 22), border_radius=4)
@@ -555,7 +641,6 @@ def draw_slot(x, y, size, key_text, cost=None, is_pressed=False):
         key_surf = ui_font_small.render(key_text.upper(), True, "white")
         gameboard.blit(key_surf, (x - 1, y - 5 + y_off))
 
-    # El lazo del coste se queda FIJO en la base original
     draw_ribbon(gameboard, x - 5, y + size + 2, 60, 25, ribbon_sheet, row=1)
 
     if cost is not None:
@@ -566,12 +651,10 @@ def draw_slot(x, y, size, key_text, cost=None, is_pressed=False):
 def draw_action_btn(x, y, w, h, key_text, label, cost=None, is_pressed=False):
     img = btn_wide_pressed_img if is_pressed else btn_wide_img
 
-    # Truco 9-slice: achicamos la caja y la bajamos
     btn_y = y + 4 if is_pressed else y
     btn_h = h - 4 if is_pressed else h
     draw_9_slice_button(gameboard, img, pygame.Rect(x, btn_y, w, btn_h), edge_px=14)
 
-    # El contenido baja 4 píxeles
     y_off = 4 if is_pressed else 0
 
     pygame.draw.rect(gameboard, "#3b2f2f", (x - 10, y - 10 + y_off, 26, 26), border_radius=4)
@@ -602,6 +685,7 @@ def draw_action_btn(x, y, w, h, key_text, label, cost=None, is_pressed=False):
         cost_surf = ui_font_small.render(f"{cost} G", True, "black")
         gameboard.blit(cost_surf, (rx_ribbon + (rw // 2) - (cost_surf.get_width() // 2), ry + 6))
 
+
 # --- BUCLE PRINCIPAL ---
 while running:
     keys = pygame.key.get_pressed()
@@ -629,15 +713,12 @@ while running:
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if game_state == "PLAYING":
-                # Si haces clic fuera del tablero de juego
                 if not on_grid:
                     if 'menu_btn_rect' in locals() and menu_btn_rect.collidepoint(mouseX, mouseY):
                         game_state = "PAUSED"
 
-                    # --- NUEVO: CLICS EN LA INTERFAZ DERECHA ---
                     rx_click = 1000
 
-                    # Clic en slots de torres
                     for i in range(4):
                         t_id = active_towers[i]
                         if t_id:
@@ -645,27 +726,22 @@ while running:
                             if slot_rect.collidepoint(mouseX, mouseY):
                                 current_tool = t_id if current_tool != t_id else None
 
-                    # Clic en Muro
                     wall_rect = pygame.Rect(rx_click + 25, 200, 50, 50)
                     if wall_rect.collidepoint(mouseX, mouseY):
                         current_tool = "wall" if current_tool != "wall" else None
 
-                        # Clic en Demolish
-                        sell_rect = pygame.Rect(rx_click + 40, 420, 200, 50)
-                        if sell_rect.collidepoint(mouseX, mouseY):
-                            current_tool = "sell" if current_tool != "sell" else None
+                    sell_rect = pygame.Rect(rx_click + 40, 420, 200, 50)
+                    if sell_rect.collidepoint(mouseX, mouseY):
+                        current_tool = "sell" if current_tool != "sell" else None
 
-                        # Clic en Repair (SELECCIONABLE)
-                        rep_rect = pygame.Rect(rx_click + 40, 510, 200, 50)
-                        if rep_rect.collidepoint(mouseX, mouseY):
-                            current_tool = "repair" if current_tool != "repair" else None
+                    rep_rect = pygame.Rect(rx_click + 40, 510, 200, 50)
+                    if rep_rect.collidepoint(mouseX, mouseY):
+                        current_tool = "repair" if current_tool != "repair" else None
 
             if game_state == "LEVEL_UP":
                 for i, rect in enumerate(card_rects):
                     if rect.collidepoint(mouseX, mouseY):
-                        global selected_card_idx
                         if selected_card_idx == i:
-                            # Segundo clic: Se procesa la recompensa
                             chosen = level_up_options[i]
 
                             if chosen["type"] == "upgrade_tower":
@@ -684,8 +760,13 @@ while running:
                                             t_row = int(t.y // grid_size)
                                             if (t_row, t_col) in structures_hp:
                                                 structures_hp[(t_row, t_col)] += hp_delta
-                                if tower_levels[t_id] == 1 and t_id not in unlocked_towers_order:
-                                    unlocked_towers_order.append(t_id)
+                                if tower_levels[t_id] == 1 and t_id not in unlocked_towers:
+                                    unlocked_towers.append(t_id)
+
+                                    for idx in range(4):
+                                        if active_towers[idx] is None:
+                                            active_towers[idx] = t_id
+                                            break
 
                             elif chosen["type"] == "unlock_passive":
                                 p_id = chosen["id"]
@@ -707,7 +788,6 @@ while running:
                             elif chosen["type"] == "gold":
                                 player_gold += 50
 
-                            # --- NUEVAS OPCIONES POST-GAME ---
                             elif chosen["type"] == "heal_20":
                                 castle_hp = min(castle_max_hp, castle_hp + int(castle_max_hp * 0.2))
                             elif chosen["type"] == "gold_100":
@@ -718,7 +798,6 @@ while running:
                             selected_card_idx = None
                             game_state = "PLAYING"
                         else:
-                            # Primer clic: Solo selecciona y destaca
                             selected_card_idx = i
                         break
 
@@ -734,7 +813,8 @@ while running:
                             player_gold += 2
                         elif cell_type == turret:
                             for t in player_group:
-                                if "castle" in type(t).__name__.lower(): continue
+                                if getattr(t, "is_castle", False): continue
+
                                 if hasattr(t, "x") and hasattr(t, "y"):
                                     t_col = int((t.x - offsetX) // grid_size)
                                     t_row = int(t.y // grid_size)
@@ -751,35 +831,37 @@ while running:
                         if player_gold >= current_wall_cost:
                             player_gold -= current_wall_cost
                             grid[hoverRow][hoverCol] = wall
-                            # Fórmula de muros
                             structures_hp[(hoverRow, hoverCol)] = int((25 + (player_level * 1.5)) * hp_buff)
 
-                    elif current_tool in ["arrow", "fireball", "kunai", "laser"]:
+                    elif current_tool in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
                         lvl = tower_levels[current_tool]
                         stats = TOWER_STATS[current_tool][max(1, lvl)]
-                        current_count = sum(1 for t in player_group if type(t).__name__.lower().startswith(
-                            current_tool) and "castle" not in type(t).__name__.lower())
+                        # NUEVO: Comparamos el tower_id exacto y que no sea castillo
+                        current_count = sum(1 for t in player_group if
+                                            getattr(t, "tower_id", None) == current_tool and not getattr(t, "is_castle", False))
 
                         if current_count < stats["limit"]:
                             cost = stats["cost"]
                             if player_gold >= cost:
                                 player_gold -= cost
                                 grid[hoverRow][hoverCol] = turret
-                                # Fórmula de torres
                                 structures_hp[(hoverRow, hoverCol)] = int(TOWER_BASE_HP[max(1, lvl)] * hp_buff)
 
                                 posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
                                 posY_px = (hoverRow * grid_size) + (grid_size // 2)
 
-                            if current_tool == "arrow":
-                                player_group.add(ArrowTower(posX_px, posY_px))
-                            elif current_tool == "fireball":
-                                player_group.add(FireballTower(posX_px, posY_px))
-                            elif current_tool == "kunai":
-                                player_group.add(KunaiTower(posX_px, posY_px))
-                            elif current_tool == "laser":
-                                player_group.add(LaserTower(posX_px, posY_px))
-                pass
+                                if current_tool == "arrow":
+                                    player_group.add(ArrowTower(posX_px, posY_px))
+                                elif current_tool == "fireball":
+                                    player_group.add(FireballTower(posX_px, posY_px))
+                                elif current_tool == "kunai":
+                                    player_group.add(KunaiTower(posX_px, posY_px))
+                                elif current_tool == "laser":
+                                    player_group.add(LaserTower(posX_px, posY_px))
+                                elif current_tool == "lightning":
+                                    player_group.add(LightningTower(posX_px, posY_px))
+                                elif current_tool == "thorns":
+                                    player_group.add(ThornsTower(posX_px, posY_px))
 
         if event.type == pygame.MOUSEBUTTONUP:
             if game_state == "PAUSED":
@@ -790,6 +872,21 @@ while running:
                                 game_state = "PLAYING"
                             else:
                                 print(f"Has pulsado {opt}. Todavía está en obras, paciencia.")
+
+        if game_state == "GAME_OVER":
+            overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
+            overlay.fill((50, 0, 0, 200))  # Un rojo oscuro dramático
+            gameboard.blit(overlay, (0, 0))
+
+            title_text = ui_font_large.render("¡DERROTA!", True, "red")
+            gameboard.blit(title_text, (640 - title_text.get_width() // 2, 250))
+
+            info_text = ui_font_medium.render(
+                f"Has sobrevivido {current_minute} minutos y {int(game_time % 60)} segundos.", True, "white")
+            gameboard.blit(info_text, (640 - info_text.get_width() // 2, 320))
+
+            exit_text = ui_font_small.render("Cierra la ventana para salir (por ahora).", True, "gray")
+            gameboard.blit(exit_text, (640 - exit_text.get_width() // 2, 400))
 
         if event.type == pygame.KEYDOWN:
             if game_state == "PLAYING":
@@ -873,7 +970,7 @@ while running:
             surface_trans.fill((255, 0, 0, 70))
         elif current_tool == "wall":
             surface_trans.fill((165, 42, 42, 120))
-        elif current_tool in ["arrow", "fireball", "kunai", "laser"]:
+        elif current_tool in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
             pygame.draw.circle(surface_trans, (0, 0, 255, 120), (grid_size // 2, grid_size // 2), 10)
         else:
             surface_trans.fill((255, 255, 255, 40))
@@ -881,11 +978,22 @@ while running:
         gameboard.blit(surface_trans, (posX_trans, posY_trans))
 
     player_group.draw(gameboard)
+
+    # 1. Trampas de suelo (Espinas) ANTES que los enemigos
+    for bullet in bullet_group:
+        if type(bullet).__name__ == "ThornsArea":
+            gameboard.blit(bullet.image, bullet.rect)
+
+    # 2. Dibujar a los enemigos pisando el suelo
     enemy_group.draw(gameboard)
-    bullet_group.draw(gameboard)
+
+    # 3. El resto de proyectiles (Flechas, Fuego, Rayos) POR ENCIMA
+    for bullet in bullet_group:
+        if type(bullet).__name__ != "ThornsArea":
+            gameboard.blit(bullet.image, bullet.rect)
+
     effects_group.draw(gameboard)
 
-    # El rayo láser se dibuja solo si la torre dice que está disparando y tiene objetivo vivo
     for tower in player_group:
         if getattr(tower, "is_firing", False) and getattr(tower, "target", None) is not None:
             if tower.target.alive():
@@ -895,9 +1003,11 @@ while running:
             else:
                 tower.is_firing = False
 
-    # ==========================================
-    # --- DIBUJADO DE LA INTERFAZ DE USUARIO ---
-    # ==========================================
+        # ==========================================
+        # --- DIBUJADO DE LA INTERFAZ DE USUARIO ---
+        # ==========================================
+        pygame.draw.rect(gameboard, "#222222", (0, 0, offsetX, 720))
+        pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (offsetX + width_gameboard), 720))
 
         # ================= PANEL IZQUIERDO =================
         clock_rect = pygame.Rect(75, 40, 120, 60)
@@ -927,7 +1037,6 @@ while running:
         # ================= PANEL DERECHO =================
         rx = 1000
 
-        # --- DIBUJAR SLOTS DE TORRES ---
         for i in range(4):
             slot_x = rx + 25 + (i * 60)
             slot_y = 50
@@ -942,7 +1051,6 @@ while running:
             else:
                 draw_slot(slot_x, slot_y, 50, key_str, None, is_pressed=False)
 
-        # --- DIBUJAR SLOTS DE PASIVAS (LOS 6 HUECOS) ---
         p_size = 36
         p_spacing = 6
         start_px = rx + 15
@@ -961,7 +1069,6 @@ while running:
                 txt_y = 140 + (p_size // 2) - (txt_surf.get_height() // 2)
                 gameboard.blit(txt_surf, (txt_x, txt_y))
 
-        # --- DIBUJAR MURO Y ORO (Posiciones subidas a 200 y 210) ---
         current_wall_cost = min(50, 10 + int(player_level * 0.8))
         wall_key = pygame.key.name(controls["wall"])
         is_wall_pressed = (current_tool == "wall") or keys[controls["wall"]]
@@ -971,32 +1078,21 @@ while running:
         gold_surf = ui_font_large.render(f"{player_gold} G", True, "black")
         gameboard.blit(gold_surf, (rx + 170 - gold_surf.get_width() // 2, 215))
 
-        # Igual que las torres, solo hundido si está seleccionado
-        is_wall_pressed = (current_tool == "wall")
-        draw_slot(rx + 15, 200, 50, wall_key, current_wall_cost, is_pressed=is_wall_pressed)
-
-        draw_ribbon(gameboard, rx + 100, 210, 140, 40, ribbon_sheet, row=0)
-        gold_surf = ui_font_large.render(f"{player_gold} G", True, "black")
-        gameboard.blit(gold_surf, (rx + 170 - gold_surf.get_width() // 2, 215))
-
-        # --- BOTONES DE ACCIÓN ---
         repair_all_cost = int((castle_max_hp - castle_hp) * 2)
 
         sell_key = pygame.key.name(controls["sell"])
         rep_key = pygame.key.name(controls["repair"])
         rep_all_key = pygame.key.name(controls["repair_all"])
 
-        # Demoler y Reparar son seleccionables (se hunden solos al seleccionarse)
         is_sell_pressed = (current_tool == "sell")
         draw_action_btn(rx + 40, 420, 200, 50, sell_key, "Demolish", is_pressed=is_sell_pressed)
 
         is_rep_pressed = (current_tool == "repair")
         draw_action_btn(rx + 40, 510, 200, 50, rep_key, "Repair", is_pressed=is_rep_pressed)
 
-        # Repair All sigue siendo una acción instantánea, se hunde si mantienes la tecla o el ratón encima
         rep_all_rect = pygame.Rect(rx + 40, 600, 200, 50)
         is_rep_all_pressed = keys[controls["repair_all"]] or (
-                    rep_all_rect.collidepoint(mouseX, mouseY) and pygame.mouse.get_pressed()[0])
+                rep_all_rect.collidepoint(mouseX, mouseY) and pygame.mouse.get_pressed()[0])
         draw_action_btn(rx + 40, 600, 200, 50, rep_all_key, "Repair All", repair_all_cost,
                         is_pressed=is_rep_all_pressed)
 
@@ -1023,23 +1119,24 @@ while running:
 
             pygame.draw.rect(gameboard, "#112233", rect)
 
-            # Si está seleccionada, reborde blanco de 5px. Si no, reborde oscuro gris de 2px.
             if selected_card_idx == i:
                 pygame.draw.rect(gameboard, "white", rect, 5)
             else:
                 pygame.draw.rect(gameboard, "#445566", rect, 2)
 
             text_surf = ui_font_medium.render(card["title"], True, "white")
-            gameboard.blit(text_surf, (cx + 10, cy + 130))
+            gameboard.blit(text_surf, (cx + 10, cy + 20))
 
-        pass
+            # --- NUEVO: Textos de descripciones con salto de línea ---
+            if "desc" in card:
+                desc_rect = pygame.Rect(cx + 10, cy + 60, card_width - 20, card_height - 80)
+                draw_text_wrapped(gameboard, card["desc"], ui_font_small, "lightgray", desc_rect)
 
     if game_state == "PAUSED":
         overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         gameboard.blit(overlay, (0, 0))
 
-        # Pasamos rows_total=5 para solucionar la pesadilla de los lazos
         draw_ribbon(gameboard, 640 - 150, 120, 300, 80, big_ribbon_sheet, row=0, rows_total=5)
         title_text = ui_font_large.render("MENU", True, "white")
         gameboard.blit(title_text, (640 - title_text.get_width() // 2, 145))
@@ -1053,7 +1150,6 @@ while running:
 
             is_hover = btn_rect.collidepoint(mouseX, mouseY) and pygame.mouse.get_pressed()[0]
 
-            # Ajuste de altura dinámica
             current_y = btn_rect.y + 4 if is_hover else btn_rect.y
             current_h = btn_rect.height - 4 if is_hover else btn_rect.height
             img = btn_wide_pressed_img if is_hover else btn_wide_img
@@ -1079,10 +1175,8 @@ while running:
         current_minute = int(game_time // 60)
         difficulty_multiplier = round(1 + (current_minute / 8) ** 1.8, 2)
 
-        # --- PASIVA: Regeneración de Vida ---
         regen_lvl = passive_levels.get("regen", 0)
         if regen_lvl > 0:
-            # Recupera 1% de la vida máxima por segundo, por cada nivel
             castle_hp = min(castle_max_hp, castle_hp + (castle_max_hp * (0.01 * regen_lvl) * dt * time_scale))
 
         if len(spawn_schedule) > 0:
@@ -1091,28 +1185,39 @@ while running:
                 setup_spawn_point(spawn_group, next_spawn_type)
                 spawn_schedule.pop(0)
 
-        # --- DIRECTOR: CÁLCULO DE LÍMITE DE POBLACIÓN ---
         current_weight = sum(ENEMY_WEIGHTS.get(type(e).__name__, 1.0) for e in enemy_group)
         active_portals = len(spawn_group)
 
-        # A partir del minuto 17.5 (1050 segundos), quitamos el límite (cap infinito)
         if game_time >= 1050:
             population_cap = 9999
-            spawn_cooldown_multiplier = 0.3  # Spawnean el triple de rápido, el infierno en la tierra
+            spawn_cooldown_multiplier = 0.3
         else:
-            # Fórmula: Base 15 + (2 por minuto) multiplicado por el número de portales
             population_cap = (15 + (current_minute * 2.0)) * max(1, active_portals)
             spawn_cooldown_multiplier = 1.0
 
-        # Encontramos la pool actual buscando el minuto clave más alto
         current_pool_key = max(k for k in WAVE_POOLS.keys() if k <= current_minute)
         current_pool = WAVE_POOLS[current_pool_key]
 
-        # Le pasamos esta info al update del spawn
         spawn_group.update(dt * time_scale, enemy_group, grid, offsetX, grid_size,
                            current_weight, population_cap, current_pool, spawn_cooldown_multiplier)
 
-        enemy_group.update(dt * time_scale, grid, enemy_group=enemy_group, structures_hp=structures_hp, passive_levels=passive_levels, thorns_values=THORNS_VALUES)
+        enemy_group.update(dt * time_scale, grid, enemy_group=enemy_group, structures_hp=structures_hp,
+                           passive_levels=passive_levels, thorns_values=THORNS_VALUES)
+
+        for enemy in enemy_group:
+            if enemy.rect.colliderect(castle_obj.rect):
+                # Si no tiene el temporizador, se lo creamos
+                if not hasattr(enemy, "castle_attack_timer"):
+                    enemy.castle_attack_timer = 1.0  # Ataca nada más tocarlo
+
+                enemy.castle_attack_timer += dt * time_scale
+                if enemy.castle_attack_timer >= 1.0:
+                    castle_hp -= getattr(enemy, "base_damage", 5)
+                    enemy.castle_attack_timer = 0.0
+
+        if castle_hp <= 0:
+            castle_hp = 0
+            game_state = "GAME_OVER"
 
         collisions = pygame.sprite.groupcollide(enemy_group, enemy_group, False, False)
         for enemy, others in collisions.items():
@@ -1138,10 +1243,9 @@ while running:
             enemy.rect.center = (round(enemy.pos.x), round(enemy.pos.y))
 
         for t in player_group:
-            if "castle" not in type(t).__name__.lower() and hasattr(t, "x"):
+            if not getattr(t, "is_castle", False) and hasattr(t, "x"):
                 t_col = int((t.x - offsetX) // grid_size)
                 t_row = int(t.y // grid_size)
-                # Si el enemigo ha destrozado la torre, el grid ya no es un '8' (turret)
                 if grid[t_row][t_col] != turret:
                     t.kill()
 
@@ -1149,7 +1253,12 @@ while running:
         bullet_group.update(dt * time_scale)
         effects_group.update(dt * time_scale)
 
+        # --- 1. CHOQUES CONTRA LA MONTAÑA ---
         for bullet in bullet_group:
+            # ¡NUEVO FILTRO! Si no tiene perforación, es un área o rayo visual. Lo saltamos.
+            if not hasattr(bullet, "pierce"):
+                continue
+
             bx = int((bullet.pos.x - offsetX) // grid_size)
             by = int(bullet.pos.y // grid_size)
             if 0 <= bx < col and 0 <= by < row:
@@ -1162,16 +1271,19 @@ while running:
 
         hits = pygame.sprite.groupcollide(bullet_group, enemy_group, False, False)
 
+        # --- 2. DAÑO A ENEMIGOS ---
         for arrow, enemies_hit in hits.items():
+            # ¡NUEVO FILTRO! El ThornsArea ya hace daño por su cuenta en su propio update.
+            if not hasattr(arrow, "pierce"):
+                continue
+
             for enemy in enemies_hit:
-                if enemy not in arrow.hit_enemies:
+                if enemy not in getattr(arrow, "hit_enemies", set()):
                     arrow.hit_enemies.add(enemy)
 
-                    # --- PASIVAS: Daño y Crítico ---
                     dmg_buff = 1.0 + (passive_levels.get("damage", 0) * 0.05)
                     final_damage = arrow.damage * dmg_buff
 
-                    # 10% prob. por nivel de meter una hostia del 150%
                     if random.random() < (passive_levels.get("crit", 0) * 0.10):
                         final_damage *= 1.5
 
@@ -1183,63 +1295,48 @@ while running:
                         for e in enemy_group:
                             if pygame.math.Vector2(arrow.rect.center).distance_to(e.pos) <= arrow.aoe_radius:
                                 e.take_damage(final_damage)
-                                if e.health <= 0:
-                                    # --- PASIVAS: Economía ---
-                                    gold_buff = 1.0 + (passive_levels.get("gold", 0) * 0.05)
-                                    xp_buff = 1.0 + (passive_levels.get("xp", 0) * 0.05)
-                                    player_gold += int(e.gold_value * gold_buff)
-
-                                    # ¡NUEVO! La XP escala con la dificultad de la partida
-                                    player_xp += int(e.xp_value * xp_buff * difficulty_multiplier)
-                                    e.kill()
                     else:
                         enemy.take_damage(final_damage)
-                        if enemy.health <= 0:
-                            # --- PASIVAS: Economía ---
-                            gold_buff = 1.0 + (passive_levels.get("gold", 0) * 0.05)
-                            xp_buff = 1.0 + (passive_levels.get("xp", 0) * 0.05)
-                            player_gold += int(enemy.gold_value * gold_buff)
-
-                            # ¡NUEVO! La XP escala con la dificultad de la partida
-                            player_xp += int(enemy.xp_value * xp_buff * difficulty_multiplier)
-                            enemy.kill()
-
-                    if player_xp >= xp_to_next_level:
-                        player_xp -= xp_to_next_level
-                        player_level += 1
-
-                        hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
-
-                        # 1. Actualizar Castillo
-                        new_castle_max = int((100 + (player_level * 18)) * hp_buff)
-                        castle_hp += (new_castle_max - castle_max_hp)
-                        castle_max_hp = new_castle_max
-
-                        # 2. Actualizar Muros existentes por diferencia de nivel
-                        old_wall_max = int((25 + ((player_level - 1) * 1.5)) * hp_buff)
-                        new_wall_max = int((25 + (player_level * 1.5)) * hp_buff)
-                        wall_delta = new_wall_max - old_wall_max
-
-                        for r in range(row):
-                            for c in range(col):
-                                if grid[r][c] == wall and (r, c) in structures_hp:
-                                    structures_hp[(r, c)] += wall_delta
-
-                        # ¡NUEVO! Curva de nivel suavizada
-                        if player_level < 50:
-                            xp_to_next_level += 15 + (player_level * 2)
-                        else:
-                            xp_to_next_level = int(xp_to_next_level * 2.5)
-
-                        game_state = "LEVEL_UP"
-                        level_up_options = get_level_up_cards()
 
                     arrow.pierce -= 1
                     if arrow.pierce <= 0:
                         arrow.kill()
                         break
 
+        # --- SISTEMA DE MUERTES GLOBAL (Y ECONOMÍA SELLADA) ---
+        for enemy in list(enemy_group):
             if enemy.health <= 0:
+                gold_buff = 1.0 + (passive_levels.get("gold", 0) * 0.05)
+                xp_buff = 1.0 + (passive_levels.get("xp", 0) * 0.05)
+                player_gold += int(enemy.gold_value * gold_buff)
+                player_xp += int(enemy.xp_value * xp_buff * difficulty_multiplier)
                 enemy.kill()
+
+                if player_xp >= xp_to_next_level:
+                    player_xp -= xp_to_next_level
+                    player_level += 1
+
+                    hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+
+                    new_castle_max = int((100 + (player_level * 18)) * hp_buff)
+                    castle_hp += (new_castle_max - castle_max_hp)
+                    castle_max_hp = new_castle_max
+
+                    old_wall_max = int((25 + ((player_level - 1) * 1.5)) * hp_buff)
+                    new_wall_max = int((25 + (player_level * 1.5)) * hp_buff)
+                    wall_delta = new_wall_max - old_wall_max
+
+                    for r in range(row):
+                        for c in range(col):
+                            if grid[r][c] == wall and (r, c) in structures_hp:
+                                structures_hp[(r, c)] += wall_delta
+
+                    if player_level < 51:
+                        xp_to_next_level += 15 + (player_level * 2)
+                    else:
+                        xp_to_next_level = int(xp_to_next_level * 2.5)
+
+                    game_state = "LEVEL_UP"
+                    level_up_options = get_level_up_cards()
 
 pygame.quit()
