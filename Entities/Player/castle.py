@@ -27,6 +27,6 @@ class LaserCastle(LaserMixin, Castle):
         super().__init__(x, y, "laser", None, color="cyan")
         self.init_laser_vars()
 
-    def update(self, dt, enemy_group, bullet_group, tower_levels, passive_levels):
-        super().update(dt, enemy_group, bullet_group, tower_levels)
+    def update(self, dt, enemy_group, bullet_group, tower_levels, passive_levels=None):
+        super().update(dt, enemy_group, bullet_group, tower_levels, passive_levels)
         self.update_laser(dt)

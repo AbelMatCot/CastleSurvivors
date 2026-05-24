@@ -167,25 +167,36 @@ class Tank(Enemy):
         # 45 HP: El triple de vida, aguanta 9 flechas
         super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=45, speed=15.0, color="blue", radius=14, xp_value=15, gold_value=8, base_damage=30)
 
+
 class Generator(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
         # 60 HP: Esponja de daño lenta que hay que priorizar
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=60, speed=10.0, color="purple", radius=16, xp_value=25, gold_value=15, base_damage=5)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=60, speed=10.0, color="purple", radius=16,
+                         xp_value=25, gold_value=15, base_damage=5)
         self.spawn_timer = 0.0
+        self.my_swarmers = []  # Lista para controlar a sus crías
 
-    def update(self, dt, grid, enemy_group=None, structures_hp=None):
-        super().update(dt, grid, enemy_group, structures_hp)
+    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+        super().update(dt, grid, enemy_group, structures_hp, passive_levels, thorns_values)
 
         if enemy_group is not None:
-            self.spawn_timer += dt
-            if self.spawn_timer >= 4.0:
-                self.spawn_timer = 0.0
-                for _ in range(3):
-                    offset_x = self.pos.x + random.uniform(-10, 10)
-                    offset_y = self.pos.y + random.uniform(-10, 10)
+            # Limpiamos la lista quitando los swarmers que ya han muerto
+            self.my_swarmers = [s for s in self.my_swarmers if s.alive()]
 
-                    swarmer = Swarmer(offset_x, offset_y, self.grid_size, self.offset_x)
-                    enemy_group.add(swarmer)
+            self.spawn_timer += dt
+
+            if self.spawn_timer >= 4.0:
+                # Solo escupe si tiene menos de 5 huérfanos vivos
+                if len(self.my_swarmers) < 5:
+                    self.spawn_timer = 0.0  # Reseteamos el timer solo si consigue parir
+
+                    for _ in range(3):
+                        offset_x = self.pos.x + random.uniform(-10, 10)
+                        offset_y = self.pos.y + random.uniform(-10, 10)
+
+                        swarmer = Swarmer(offset_x, offset_y, self.grid_size, self.offset_x)
+                        enemy_group.add(swarmer)
+                        self.my_swarmers.append(swarmer)  # Lo metemos en la guardería
 
 class Swarmer(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
