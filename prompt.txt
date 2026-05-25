@@ -1,0 +1,56 @@
+¡Buena idea, Nick! Hacer un backup en frío del estado del proyecto nunca sobra.
+
+> **Witty remark:** Guardar todo el contexto de diseño en un prompt masivo es el equivalente a hacer un `git commit -m "funciona no tocar"` un viernes por la tarde. Te salva la vida cuando retomas el código el lunes y tu cerebro ha liberado toda la memoria caché.
+
+Aquí tienes el texto exacto empaquetado y estructurado. Cuando necesites recordarme de qué va todo, solo tienes que copiar y pegar esto en un chat nuevo:
+
+---
+
+"Actúa como mi compañero desarrollador experto en Python, Pygame y diseño de videojuegos. Estamos programando un Tower Defense inspirado en Vampire Survivors. Aquí tienes el documento de diseño técnico (GDD) y el estado actual del proyecto para que tengas todo el contexto:
+
+**1. MOTOR Y CÓDIGO ACTUAL**
+
+* **Lenguaje/Framework:** Python con Pygame.
+* **Grid:** Tablero de 24x24 (celdas de 30px). Movimiento por vectores, colisiones matemáticas optimizadas sin físicas complejas.
+* **Arquitectura:** Programación orientada a objetos (main, projectiles, towers, enemies, spawn).
+
+**2. ESCALADO Y DIFICULTAD (20 Minutos)**
+
+* **Reloj:** Partida con límite de 20 minutos.
+* **Fórmula Dificultad:** Multiplicador exponencial de vida y daño enemigo: `REDONDEAR(1 + (Minuto / 8) ^ 1.8; 2)`.
+* **Spawns:** Límite de enemigos en pantalla dinámico. Si el jugador limpia rápido, salen más (más XP). A partir del minuto 15, horda masiva sin límite.
+
+**3. PROGRESIÓN DEL JUGADOR (Nivel Max: 60)**
+
+* **XP:** Lineal hasta el nivel 60, luego se vuelve exponencial.
+* **Inventario:** 4 slots de torres y 4 slots de pasivas (Daño, Cadencia, Rango, Proyectiles extra).
+* **Balanceo:** Cada subida de nivel otorga un pequeño buff de daño pasivo global (+2%).
+* **Recompensas (Post-lvl 60):** A elegir entre Curar Castillo, Oro extra o Moneda de Metaprogreso (Gemas).
+
+**4. TORRES**
+
+* **Flechas:** Daño base, un solo objetivo. (Con atributo *pierce*).
+* **Bola de Fuego:** Lenta, daño en área enorme.
+* **Kunais:** Disparo rápido, ideales para esquinas.
+* **Láser:** Sin proyectiles físicos. Aplica ralentización (20% al 50%) con 0.5s de duración residual. Cadencia fija de 0.2s.
+
+**5. BESTIARIO DE ENEMIGOS**
+
+* **Básico:** Stats estándar.
+* **Rápido:** Doble velocidad, muy poca vida.
+* **Tanque:** Lento, esponja de daño.
+* **Generador:** Spawnea 3 "Enjambrados" rápidos cada 4s.
+* **Tirador:** Hitscan (sin proyectil). Ataca muros/torres a distancia.
+* **Volador:** Ignora el laberinto, va directo al castillo.
+
+**6. JEFES Y EVENTOS**
+
+* **Botín:** Los jefes sueltan cofres (mejoras directas) y mucho oro, pero poca XP para no desbalancear el nivel.
+* **Timings:** Jefes en minutos 5, 9, 12, 15. Minibosses en 17 y 19.
+* **Megaboss (Min 20):** El miniboss del min 19 telegrafía visualmente de qué lado del mapa saldrá el Megaboss final, el cual destruye la montaña al entrar.
+
+Teniendo todo esto en cuenta, continuemos con el desarrollo."
+
+---
+
+¡Guárdalo a buen recaudo en un `.txt`! ¿Le damos ya caña a conectar el multiplicador de dificultad con la vida de los enemigos en el código?

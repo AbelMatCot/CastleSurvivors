@@ -77,6 +77,7 @@ TOWER_STATS = {
     },
 }
 
+
 class LightningVisual(pygame.sprite.Sprite):
     def __init__(self, start_pos, end_pos):
         super().__init__()
@@ -85,16 +86,19 @@ class LightningVisual(pygame.sprite.Sprite):
         dy = end_pos[1] - start_pos[1]
 
         if lightning_sheet:
-            h = lightning_sheet.get_height()
-            w = lightning_sheet.get_width()
-            num_frames = w // h
+            frame_w = 216
+            frame_h = 108
+            num_frames = lightning_sheet.get_width() // frame_w
+
             dist = max(1, math.hypot(dx, dy))
             angle = math.degrees(math.atan2(-dy, dx))
 
             for i in range(num_frames):
-                frame = pygame.Surface((h, h), pygame.SRCALPHA)
-                frame.blit(lightning_sheet, (0, 0), (i * h, 0, h, h))
-                frame = pygame.transform.scale(frame, (int(dist), 20))
+                frame = pygame.Surface((frame_w, frame_h), pygame.SRCALPHA)
+                # Recortamos usando el ancho real (frame_w)
+                frame.blit(lightning_sheet, (0, 0), (i * frame_w, 0, frame_w, frame_h))
+                # Lo estiramos hasta el enemigo manteniendo el grosor de 35
+                frame = pygame.transform.scale(frame, (int(dist), 35))
                 frame = pygame.transform.rotate(frame, angle)
                 self.frames.append(frame)
 
