@@ -118,6 +118,35 @@ class LightningVisual(pygame.sprite.Sprite):
                 self.kill()
 
 
+class IceBeamVisual(pygame.sprite.Sprite):
+    def __init__(self, start_pos, end_pos):
+        super().__init__()
+        # Calculamos la caja que ocupa el láser
+        min_x, max_x = min(start_pos[0], end_pos[0]), max(start_pos[0], end_pos[0])
+        min_y, max_y = min(start_pos[1], end_pos[1]), max(start_pos[1], end_pos[1])
+
+        pad = 10
+        w = max(1, max_x - min_x) + pad * 2
+        h = max(1, max_y - min_y) + pad * 2
+
+        self.image = pygame.Surface((w, h), pygame.SRCALPHA)
+
+        # Coordenadas locales dentro de la Surface
+        lx1, ly1 = start_pos[0] - min_x + pad, start_pos[1] - min_y + pad
+        lx2, ly2 = end_pos[0] - min_x + pad, end_pos[1] - min_y + pad
+
+        # Dibujamos un resplandor azulado y el núcleo blanco
+        pygame.draw.line(self.image, (0, 200, 255, 150), (lx1, ly1), (lx2, ly2), 6)
+        pygame.draw.line(self.image, (255, 255, 255), (lx1, ly1), (lx2, ly2), 2)
+
+        self.rect = self.image.get_rect(topleft=(min_x - pad, min_y - pad))
+        self.timer = 0.0
+
+    def update(self, dt):
+        self.timer += dt
+        if self.timer >= 0.2:  # Desaparece rápido
+            self.kill()
+
 class ThornsArea(pygame.sprite.Sprite):
     def __init__(self, x, y, stats, enemy_group):
         super().__init__()
@@ -214,6 +243,10 @@ class LaserMixin:
         self.is_firing = True
         self.laser_timer = stats["cd"]
 
+        # Generamos el visual del láser
+        origin_y = self.y - 25
+        bullet_group.add(IceBeamVisual((self.x, origin_y), enemy.pos))
+
 
 class Tower(pygame.sprite.Sprite):
     def __init__(self, x, y, tower_id, projectile_class, color="blue", is_castle=False):
@@ -222,18 +255,34 @@ class Tower(pygame.sprite.Sprite):
         self.shoot_timer = 0.0
         self.projectile_class = projectile_class
         self.is_castle = is_castle
-
-        if self.is_castle:
-            self.image = pygame.Surface((60, 60))
-            self.image.fill("yellow")
-        else:
-            self.image = pygame.Surface((30, 30), pygame.SRCALPHA)
-            pygame.draw.circle(self.image, color, (15, 15), 10)
-
-        self.rect = self.image.get_rect()
-        self.rect.center = (x, y)
         self.x = x
         self.y = y
+
+        # --- CARGA DINÁMICA DE SPRITES ---
+        tipo_sprite = "castle" if is_castle else "tower"
+        ruta_img = os.path.join("Assets", "Sprites", "Player", f"{tower_id}{tipo_sprite}.png")
+
+        try:
+            self.image = pygame.image.load(ruta_img).convert_alpha()
+        except FileNotFoundError:
+            # Fallback si no encuentra el dibujo
+            ruta_fallback = os.path.join("Assets", "Sprites", "Player", f"fallback{tipo_sprite}.png")
+            try:
+                self.image = pygame.image.load(ruta_fallback).convert_alpha()
+            except FileNotFoundError:
+                # Por si acaso tampoco está el fallback
+                self.image = pygame.Surface((60, 60) if is_castle else (30, 60))
+                self.image.fill("magenta")
+
+        self.rect = self.image.get_rect()
+
+        # --- AJUSTE PARA EL Y-SORTING ---
+        if self.is_castle:
+            # El castillo ocupa 2x2. Su centro Y está en medio. La base está 30px abajo.
+            self.rect.midbottom = (x, y + 30)
+        else:
+            # La torre ocupa 1 casilla. Su base está 15px debajo de su centro Y.
+            self.rect.midbottom = (x, y + 15)
 
     def update(self, dt, enemy_group, bullet_group, tower_levels, passive_levels):
         level = max(1, tower_levels.get(self.tower_id, 1))
@@ -265,19 +314,21 @@ class Tower(pygame.sprite.Sprite):
 
             if closest_enemy:
                 self.shoot_timer = 0.0
+                origin_y = self.y - 25  # Subimos el cañón a la ventana de la torre
+
                 if self.projectile_class:
                     projs = stats["proj"]
                     if projs == 1:
-                        bullet_group.add(self.projectile_class((self.x, self.y), closest_enemy.pos, stats))
+                        bullet_group.add(self.projectile_class((self.x, origin_y), closest_enemy.pos, stats))
                     else:
-                        base_dir = (closest_enemy.pos - pygame.math.Vector2(self.x, self.y)).normalize()
+                        base_dir = (closest_enemy.pos - pygame.math.Vector2(self.x, origin_y)).normalize()
                         spread_angle = 15
                         start_angle = - (projs // 2) * spread_angle
                         for i in range(projs):
                             angle = start_angle + i * spread_angle
                             new_dir = base_dir.rotate(angle)
-                            fake_target = pygame.math.Vector2(self.x, self.y) + new_dir * 100
-                            bullet_group.add(self.projectile_class((self.x, self.y), fake_target, stats))
+                            fake_target = pygame.math.Vector2(self.x, origin_y) + new_dir * 100
+                            bullet_group.add(self.projectile_class((self.x, origin_y), fake_target, stats))
                 else:
                     self.fire_instant(closest_enemy, stats, enemy_group, bullet_group)
 
@@ -321,7 +372,8 @@ class LightningTower(Tower):
         current_target = enemy
 
         current_target.take_damage(stats["damage"])
-        bullet_group.add(LightningVisual((self.x, self.y), current_target.pos))
+        origin_y = self.y - 25
+        bullet_group.add(LightningVisual((self.x, origin_y), current_target.pos))
 
         for _ in range(stats.get("bounces", 0)):
             next_target = None
