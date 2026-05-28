@@ -988,31 +988,31 @@ while running:
             surface_trans.fill((255, 255, 255, 40))
         gameboard.blit(surface_trans, (posX_trans, posY_trans))
 
-        for bullet in bullet_group:
-            if type(bullet).__name__ == "ThornsArea":
-                gameboard.blit(bullet.image, bullet.rect)
+    for bullet in bullet_group:
+        if type(bullet).__name__ == "ThornsArea":
+            gameboard.blit(bullet.image, bullet.rect)
 
-        entidades_vivas = list(player_group) + list(enemy_group)
-        for bullet in bullet_group:
-            if type(bullet).__name__ in ["IceBeamVisual", "LightningVisual"]:
-                entidades_vivas.append(bullet)
+    entidades_vivas = list(player_group) + list(enemy_group)
+    for bullet in bullet_group:
+        if type(bullet).__name__ in ["IceBeamVisual", "LightningVisual"]:
+            entidades_vivas.append(bullet)
 
-        entidades_vivas.sort(key=lambda entidad: entidad.rect.bottom)
+    entidades_vivas.sort(key=lambda entidad: entidad.rect.bottom)
 
-        for entidad in entidades_vivas:
-            gameboard.blit(entidad.image, entidad.rect)
+    for entidad in entidades_vivas:
+        gameboard.blit(entidad.image, entidad.rect)
 
-        for bullet in bullet_group:
-            if type(bullet).__name__ not in ["ThornsArea", "IceBeamVisual", "LightningVisual"]:
-                gameboard.blit(bullet.image, bullet.rect)
+    for bullet in bullet_group:
+        if type(bullet).__name__ not in ["ThornsArea", "IceBeamVisual", "LightningVisual"]:
+            gameboard.blit(bullet.image, bullet.rect)
 
-        effects_group.draw(gameboard)
+    effects_group.draw(gameboard)
 
-        # --- NUEVO: DIBUJAMOS LA TORRE FANTASMA AQUÍ ---
-        if current_tool in preview_towers:
-            tower_img = preview_towers[current_tool]
-            # Subimos el sprite 30px para que la base pise exactamente la celda
-            gameboard.blit(tower_img, (posX_trans, posY_trans - 30))
+    # --- NUEVO: DIBUJAMOS LA TORRE FANTASMA AQUÍ ---
+    if current_tool in preview_towers:
+        tower_img = preview_towers[current_tool]
+        # Subimos el sprite 30px para que la base pise exactamente la celda
+        gameboard.blit(tower_img, (posX_trans, posY_trans - 30))
 
     pygame.draw.rect(gameboard, "#222222", (0, 0, offsetX, 720))
     pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (offsetX + width_gameboard), 720))
