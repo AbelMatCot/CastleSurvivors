@@ -323,7 +323,7 @@ else:
         ui_font_medium = pygame.font.Font(font_path, 22)
         ui_font_small = pygame.font.Font(font_path, 16)
     except FileNotFoundError:
-        print("Aviso: No se encontró Assets/alagard.ttf. Usando Arial como emergencia.")
+        print("Warning: Assets/alagard.ttf not found. Using Arial as fallback.")
         ui_font_large = pygame.font.SysFont("Arial", 28, bold=True)
         ui_font_medium = pygame.font.SysFont("Arial", 20, bold=True)
         ui_font_small = pygame.font.SysFont("Arial", 14, bold=True)
@@ -346,6 +346,41 @@ for t_name in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
     img_copy.set_alpha(150)  # Hacemos la torre semitransparente
     preview_towers[t_name] = img_copy
 
+# --- CARGA DEL TILESET DE MUROS Y BITMASKING ---
+try:
+    wall_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Tiles", "walls.png")).convert_alpha()
+except FileNotFoundError:
+    wall_sheet = pygame.Surface((120, 120), pygame.SRCALPHA)
+    wall_sheet.fill("brown")
+
+# PRIMERO DECLARAMOS EL DICCIONARIO MATEMÁTICO
+wall_mask_map = {
+    10: (0, 0), 5: (1, 0), 15: (2, 0), 0: (3, 0),
+    3: (0, 1), 6: (1, 1), 12: (2, 1), 9: (3, 1),
+    1: (0, 2), 4: (1, 2), 8: (2, 2), 2: (3, 2),
+    11: (0, 3), 7: (1, 3), 14: (2, 3), 13: (3, 3)
+}
+
+# --- CARGA DE MUROS DESTRUIDOS (RUINAS) ---
+try:
+    ruin_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Tiles", "ruins.png")).convert_alpha()
+except FileNotFoundError:
+    ruin_sheet = pygame.Surface((120, 120), pygame.SRCALPHA)
+
+ruin_sprites = {}
+for mask, (c, r) in wall_mask_map.items():
+    if mask != 0:  # El 0 no lo guardamos porque las ruinas aisladas desaparecen
+        ruin_sprites[mask] = extract_sprite(ruin_sheet, c, r, 4, 4, crop=False)
+
+wall_sprites = {}
+for mask, (c, r) in wall_mask_map.items():
+    wall_sprites[mask] = extract_sprite(wall_sheet, c, r, 4, 4, crop=False)
+
+# Añadimos el muro horizontal a la interfaz y al fantasma
+ui_tower_icons["wall"] = pygame.transform.scale(wall_sprites[10], (30, 30))
+preview_towers["wall"] = wall_sprites[10].copy()
+preview_towers["wall"].set_alpha(150)
+
 effects_group = pygame.sprite.Group()
 
 path_color2 = os.path.join("Assets", "Sprites", "Tiles", "Tilemap_color2.png")
@@ -357,7 +392,7 @@ try:
     color4_sheet = pygame.image.load(path_color4).convert_alpha()
     elevation_sheet = pygame.image.load(path_elevation).convert_alpha()
 except FileNotFoundError:
-    print("ERROR: Faltan las texturas de terreno.")
+    print("ERROR: Missing terrain textures.")
     pygame.quit()
     sys.exit()
 
@@ -375,7 +410,7 @@ try:
     small_bar_fill = pygame.image.load(os.path.join(ui_path, "SmallBar_Fill.png")).convert_alpha()
     big_ribbon_sheet = pygame.image.load(os.path.join(ui_path, "BigRibbons.png")).convert_alpha()
 except FileNotFoundError as e:
-    print(f"ERROR UI: No se encontró la imagen {e}.")
+    print(f"UI ERROR: Image {e} not found.")
     pygame.quit()
     sys.exit()
 
@@ -452,7 +487,7 @@ TOWER_DESCRIPTIONS = {
     },
     "lightning": {
         1: "High firerate, low damage. Projectiles bounce between enemies.",
-        2: "Damage increased.", 3: "Firerate increased.",
+        2: "Damage increased.", 3: "Firerate increased. Bounce range increased.",
         4: "Bounces increased. Tower limit increased.", 5: "Damage increased.",
         6: "Bounces increased. Firerate increased.", 7: "Tower limit increased.",
         8: "Range, damage, firerate and bounces greatly increased."
@@ -504,6 +539,8 @@ selected_card_idx = None
 castle_max_hp = 100
 castle_hp = castle_max_hp
 structures_hp = {}
+wall_masks = {}
+ruin_masks = {}
 
 tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
 
@@ -605,9 +642,9 @@ def setup_spawn_point(spwn_grp, spawn_type="balanced"):
 def get_level_up_cards():
     if player_level > 50:
         return [
-            {"title": "Curar Castillo 20%", "desc": "Restaura una gran cantidad de vida perdida.", "type": "heal_20"},
-            {"title": "Saco de Oro (+100)", "desc": "Un gran empujón para tu economía.", "type": "gold_100"},
-            {"title": "Gemas (+5)", "desc": "Útiles para la meta-progresión.", "type": "gems_5"}
+            {"title": "Heal Castle 20%", "desc": "Restores a large amount of lost health.", "type": "heal_20"},
+            {"title": "Gold Bag (+100)", "desc": "A big boost for your economy.", "type": "gold_100"},
+            {"title": "Gems (+5)", "desc": "Useful for meta-progression.", "type": "gems_5"}
         ]
     pool = []
     has_free_slot = None in active_towers
@@ -624,24 +661,24 @@ def get_level_up_cards():
                          "type": "upgrade_tower", "id": t_id})
 
     passive_names = {
-        "damage": "Daño", "firerate": "Cadencia", "range": "Rango/Área",
-        "health": "Vida Máx", "regen": "Regen Vida", "armor": "Armadura",
-        "thorns": "Espinas", "gold": "Oro Extra", "xp": "XP Extra", "crit": "Crítico"
+        "damage": "Damage", "firerate": "Firerate", "range": "Range/Area",
+        "health": "Max Health", "regen": "Health Regen", "armor": "Armor",
+        "thorns": "Thorns", "gold": "Extra Gold", "xp": "Extra XP", "crit": "Critical"
     }
 
     for p_id, lvl in passive_levels.items():
         if lvl == 0:
             if len(active_passives) < 6:
-                pool.append({"title": f"Pasiva: {passive_names[p_id]}", "desc": PASSIVE_DESCRIPTIONS[p_id],
+                pool.append({"title": f"Passive: {passive_names[p_id]}", "desc": PASSIVE_DESCRIPTIONS[p_id],
                              "type": "unlock_passive", "id": p_id})
         elif lvl < 4:
-            pool.append({"title": f"Mejora: {passive_names[p_id]} (Lvl{lvl + 1})", "desc": PASSIVE_DESCRIPTIONS[p_id],
+            pool.append({"title": f"Upgrade: {passive_names[p_id]} (Lvl{lvl + 1})", "desc": PASSIVE_DESCRIPTIONS[p_id],
                          "type": "upgrade_passive", "id": p_id})
 
     random.shuffle(pool)
     cards = pool[:3]
 
-    fallbacks = [{"title": "Saco de Oro (+50)", "type": "gold"}, {"title": "Curar Castillo 50%", "type": "heal"}]
+    fallbacks = [{"title": "Gold Bag (+50)", "type": "gold"}, {"title": "Heal Castle 50%", "type": "heal"}]
     while len(cards) < 3:
         cards.append(random.choice(fallbacks))
     return cards
@@ -655,6 +692,38 @@ def get_tile_for_cell(col_idx, row_idx, target_types, tile_dict, oob_is_target=T
     key = (int(N), int(S), int(W), int(E))
     return tile_dict.get(key, tile_dict.get((1, 1, 1, 1)))
 
+
+def update_ruin_masks(r, c):
+    mask = 0
+    if r > 0 and grid[r - 1][c] == wall: mask += 1
+    if c < col - 1 and grid[r][c + 1] == wall: mask += 2
+    if r < row - 1 and grid[r + 1][c] == wall: mask += 4
+    if c > 0 and grid[r][c - 1] == wall: mask += 8
+
+    if mask == 0:
+        if (r, c) in ruin_masks:
+            del ruin_masks[(r, c)]
+    else:
+        ruin_masks[(r, c)] = mask
+
+
+def update_wall_masks(r, c):
+    mask = 0
+    # Comprobamos si hay un muro sano O una ruina en cada dirección
+    if r > 0 and (grid[r - 1][c] == wall or (r - 1, c) in ruin_masks): mask += 1  # Norte
+    if c < col - 1 and (grid[r][c + 1] == wall or (r, c + 1) in ruin_masks): mask += 2  # Este
+    if r < row - 1 and (grid[r + 1][c] == wall or (r + 1, c) in ruin_masks): mask += 4  # Sur
+    if c > 0 and (grid[r][c - 1] == wall or (r, c - 1) in ruin_masks): mask += 8  # Oeste
+    wall_masks[(r, c)] = mask
+
+
+def update_neighbors_walls(r, c):
+    for nr, nc in [(r, c), (r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)]:
+        if 0 <= nr < row and 0 <= nc < col:
+            if grid[nr][nc] == wall:
+                update_wall_masks(nr, nc)
+            if (nr, nc) in ruin_masks:
+                update_ruin_masks(nr, nc)
 
 # =====================================================================
 # CAPÍTULO 7: PREPARACIÓN DEL MAPA Y GRUPOS
@@ -846,6 +915,9 @@ while running:
 
                         if cell_type == wall:
                             player_gold += 2
+                            # Borramos su dibujo y actualizamos los de alrededor
+                            if coords in wall_masks: del wall_masks[coords]
+                            update_neighbors_walls(hoverRow, hoverCol)
                         elif cell_type == turret:
                             for t in player_group:
                                 if getattr(t, "is_castle", False): continue
@@ -856,6 +928,9 @@ while running:
                                         t.kill()
                                         player_gold += 10
                                         break
+                        # --- BORRAR RUINAS ---
+                        elif (hoverRow, hoverCol) in ruin_masks:
+                            del ruin_masks[(hoverRow, hoverCol)]
 
                 elif grid[hoverRow][hoverCol] == allow:
                     hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
@@ -866,6 +941,11 @@ while running:
                             player_gold -= current_wall_cost
                             grid[hoverRow][hoverCol] = wall
                             structures_hp[(hoverRow, hoverCol)] = int((25 + (player_level * 1.5)) * hp_buff)
+
+                            if (hoverRow, hoverCol) in ruin_masks:
+                                del ruin_masks[(hoverRow, hoverCol)]
+
+                            update_neighbors_walls(hoverRow, hoverCol)
 
                     elif current_tool in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
                         lvl = tower_levels[current_tool]
@@ -905,7 +985,7 @@ while running:
                             if opt == "Resume":
                                 game_state = "PLAYING"
                             else:
-                                print(f"Has pulsado {opt}. Todavía está en obras, paciencia.")
+                                print(f"You clicked {opt}. It's still a work in progress, patience.")
 
         if event.type == pygame.KEYDOWN:
             if game_state == "PLAYING":
@@ -958,49 +1038,57 @@ while running:
             if cell in buildable_targets:
                 tile = get_tile_for_cell(x, y, buildable_targets, buildable_tiles, False)
                 gameboard.blit(tile, (posX, posY))
+
+                # --- PINTAMOS RUINAS SI EXISTEN (incluso debajo de torres) ---
+                if (y, x) in ruin_masks:
+                    mask = ruin_masks[(y, x)]
+                    gameboard.blit(ruin_sprites[mask], (posX, posY))
+
+                # --- PINTAMOS LOS MUROS SANOS ---
+                if cell == wall:
+                    mask = wall_masks.get((y, x), 0)
+                    gameboard.blit(wall_sprites[mask], (posX, posY))
+
             elif cell == mountain:
                 tile = get_tile_for_cell(x, y, [mountain], mountain_tiles, True)
                 gameboard.blit(tile, (posX, posY))
-## TODO ell fucking muro
-            elif cell == wall:
-                pygame.draw.rect(gameboard, "brown", (posX, posY, grid_size, grid_size))
 
     if show_grid:
         gameboard.blit(grid_overlay, (offsetX, 0))
 
+    # === 1. PINTAMOS EL SUELO (SOLO SI EL RATÓN ESTÁ EN EL MAPA) ===
     if on_grid and game_state == "PLAYING":
         posX_trans = offsetX + (hoverCol * grid_size)
         posY_trans = hoverRow * grid_size
-        surface_trans = pygame.Surface((grid_size, grid_size), pygame.SRCALPHA)
         current_cell = grid[hoverRow][hoverCol]
 
-        if current_tool == "sell":
-            if current_cell in [wall, turret]:
-                surface_trans.fill((255, 0, 0, 150))
+        if current_cell != castle:
+            surface_trans = pygame.Surface((grid_size, grid_size), pygame.SRCALPHA)
+            if current_tool == "sell":
+                if current_cell in [wall, turret] or (hoverRow, hoverCol) in ruin_masks:
+                    surface_trans.fill((255, 0, 0, 150))
+                else:
+                    surface_trans.fill((255, 0, 0, 40))
+            elif current_tool is not None and current_cell != allow:
+                surface_trans.fill((255, 0, 0, 70))
             else:
-                surface_trans.fill((255, 0, 0, 40))
-        elif current_tool is not None and current_cell != allow:
-            surface_trans.fill((255, 0, 0, 70))
-        elif current_tool == "wall":
-            surface_trans.fill((165, 42, 42, 120))
-        else:
-            # Cuadrado blanco suave para todo lo demás
-            surface_trans.fill((255, 255, 255, 40))
-        gameboard.blit(surface_trans, (posX_trans, posY_trans))
+                surface_trans.fill((255, 255, 255, 40))
+            gameboard.blit(surface_trans, (posX_trans, posY_trans))
 
+    # === 2. PINTAMOS ENTIDADES ===
     for bullet in bullet_group:
         if type(bullet).__name__ == "ThornsArea":
             gameboard.blit(bullet.image, bullet.rect)
 
-    entidades_vivas = list(player_group) + list(enemy_group)
+    living_entities = list(player_group) + list(enemy_group)
     for bullet in bullet_group:
         if type(bullet).__name__ in ["IceBeamVisual", "LightningVisual"]:
-            entidades_vivas.append(bullet)
+            living_entities.append(bullet)
 
-    entidades_vivas.sort(key=lambda entidad: entidad.rect.bottom)
+    living_entities.sort(key=lambda entity: entity.rect.bottom)
 
-    for entidad in entidades_vivas:
-        gameboard.blit(entidad.image, entidad.rect)
+    for entity in living_entities:
+        gameboard.blit(entity.image, entity.rect)
 
     for bullet in bullet_group:
         if type(bullet).__name__ not in ["ThornsArea", "IceBeamVisual", "LightningVisual"]:
@@ -1008,11 +1096,45 @@ while running:
 
     effects_group.draw(gameboard)
 
-    # --- NUEVO: DIBUJAMOS LA TORRE FANTASMA AQUÍ ---
-    if current_tool in preview_towers:
-        tower_img = preview_towers[current_tool]
-        # Subimos el sprite 30px para que la base pise exactamente la celda
-        gameboard.blit(tower_img, (posX_trans, posY_trans - 30))
+    # === 3. PINTAMOS LA TORRE/MURO FANTASMA Y TEXTO LÍMITE ===
+    if on_grid and game_state == "PLAYING":
+        posX_trans = offsetX + (hoverCol * grid_size)
+        posY_trans = hoverRow * grid_size
+        current_cell = grid[hoverRow][hoverCol]
+
+        if current_tool in preview_towers:
+            tower_img = preview_towers[current_tool].copy()
+
+            if current_tool == "wall":
+                can_build = (current_cell == allow) and (player_gold >= min(50, 10 + int(player_level * 0.8)))
+                shift_y = 0  # El muro no necesita elevarse
+                limit_text = None
+            else:
+                lvl = max(1, tower_levels[current_tool])
+                stats = TOWER_STATS[current_tool][lvl]
+                limit = stats["limit"]
+                cost = stats["cost"]
+                current_count = sum(1 for t in player_group if
+                                    getattr(t, "tower_id", None) == current_tool and not getattr(t, "is_castle", False))
+                can_build = (current_cell == allow) and (current_count < limit) and (player_gold >= cost)
+                shift_y = 30  # Las torres sí
+                limit_text = f"{current_count}/{limit}"
+
+            if not can_build:
+                # El trucazo del rojo puro
+                tower_img.fill((0, 255, 255, 0), special_flags=pygame.BLEND_RGB_SUB)
+
+            gameboard.blit(tower_img, (posX_trans, posY_trans - shift_y))
+
+            # Dibujamos el texto solo si es una torre
+            if limit_text:
+                text_color = "white" if current_count < limit else "red"
+                outline_surf = ui_font_medium.render(limit_text, True, "black")
+                for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                    gameboard.blit(outline_surf, (mouseX + 15 + dx, mouseY + 15 + dy))
+
+                text_surf = ui_font_medium.render(limit_text, True, text_color)
+                gameboard.blit(text_surf, (mouseX + 15, mouseY + 15))
 
     pygame.draw.rect(gameboard, "#222222", (0, 0, offsetX, 720))
     pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (offsetX + width_gameboard), 720))
@@ -1065,8 +1187,8 @@ while running:
                 p_id = active_passives[i]
                 lvl = passive_levels[p_id]
                 pygame.draw.rect(gameboard, "#3b2f2f", (slot_x + 4, 144, p_size - 8, p_size - 8), border_radius=4)
-                inicial = p_id[0].upper()
-                txt_surf = ui_font_small.render(f"{inicial}{lvl}", True, "yellow")
+                initial = p_id[0].upper()
+                txt_surf = ui_font_small.render(f"{initial}{lvl}", True, "yellow")
                 txt_x = slot_x + (p_size // 2) - (txt_surf.get_width() // 2)
                 txt_y = 140 + (p_size // 2) - (txt_surf.get_height() // 2)
                 gameboard.blit(txt_surf, (txt_x, txt_y))
@@ -1074,7 +1196,7 @@ while running:
         current_wall_cost = min(50, 10 + int(player_level * 0.8))
         wall_key = pygame.key.name(controls["wall"])
         is_wall_pressed = (current_tool == "wall") or keys[controls["wall"]]
-        draw_slot(rx + 25, 200, 50, wall_key, current_wall_cost, is_pressed=is_wall_pressed)
+        draw_slot(rx + 25, 200, 50, wall_key, current_wall_cost, is_pressed=is_wall_pressed, t_id="wall")
 
         draw_ribbon(gameboard, rx + 100, 210, 140, 40, ribbon_sheet, rw=0)
         gold_surf = ui_font_large.render(f"{player_gold} G", True, "black")
@@ -1102,12 +1224,12 @@ while running:
         overlay.fill((50, 0, 0, 200))
         gameboard.blit(overlay, (0, 0))
 
-        title_text = ui_font_large.render("¡DERROTA!", True, "red")
+        title_text = ui_font_large.render("DEFEAT!", True, "red")
         gameboard.blit(title_text, (640 - title_text.get_width() // 2, 250))
-        info_text = ui_font_medium.render(f"Has sobrevivido {current_minute} minutos y {int(game_time % 60)} segundos.",
+        info_text = ui_font_medium.render(f"You survived for {current_minute} minutes and {int(game_time % 60)} seconds.",
                                           True, "white")
         gameboard.blit(info_text, (640 - info_text.get_width() // 2, 320))
-        exit_text = ui_font_small.render("Cierra la ventana para salir.", True, "gray")
+        exit_text = ui_font_small.render("Close the window to exit.", True, "gray")
         gameboard.blit(exit_text, (640 - exit_text.get_width() // 2, 400))
 
     elif game_state == "LEVEL_UP":
@@ -1211,6 +1333,18 @@ while running:
                            current_pool, spawn_cooldown_multiplier)
         enemy_group.update(dt * time_scale, grid, enemy_group=enemy_group, structures_hp=structures_hp,
                            passive_levels=passive_levels, thorns_values=THORNS_VALUES)
+
+        # --- LIMPIEZA DE MUROS DESTRUIDOS Y CREACIÓN DE RUINAS ---
+        broken_walls = []
+        for (r, c) in list(wall_masks.keys()):
+            if grid[r][c] != wall:
+                broken_walls.append((r, c))
+
+        for (r, c) in broken_walls:
+            del wall_masks[(r, c)]
+            ruin_masks[(r, c)] = 0  # Valor temporal para que se registre
+            update_ruin_masks(r, c)  # Calcula su forma real o la borra si da 0
+            update_neighbors_walls(r, c)
 
         for enemy in enemy_group:
             if enemy.rect.colliderect(castle_obj.rect):

@@ -378,7 +378,12 @@ class LightningTower(Tower):
         for _ in range(stats.get("bounces", 0)):
             next_target = None
             min_dist = float("inf")
-            bounce_range = stats["range"] / 2
+            if self.level >= 3:
+                self.bounce_range = self.range * 0.9
+            elif self.level == 8:
+                self.bounce_range = self.range
+            else:
+                self.bounce_range = self.range * 0.75
 
             for e in enemy_group:
                 if e not in hit_enemies:
