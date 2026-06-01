@@ -35,7 +35,7 @@ class Projectile(pygame.sprite.Sprite):
 
 class Arrow(Projectile):
     def __init__(self, start_pos, target_pos, stats):
-        super().__init__(start_pos, target_pos, speed=300.0, size=6, color="black", stats=stats)
+        super().__init__(start_pos, target_pos, speed=350.0, size=6, color="black", stats=stats)
 
 
 class Fireball(Projectile):

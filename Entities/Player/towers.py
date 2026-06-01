@@ -126,8 +126,8 @@ class IceBeamVisual(pygame.sprite.Sprite):
         min_y, max_y = min(start_pos[1], end_pos[1]), max(start_pos[1], end_pos[1])
 
         pad = 10
-        w = max(1, max_x - min_x) + pad * 2
-        h = max(1, max_y - min_y) + pad * 2
+        w = int(max(1, max_x - min_x) + pad * 2)
+        h = int(max(1, max_y - min_y) + pad * 2)
 
         self.image = pygame.Surface((w, h), pygame.SRCALPHA)
 
@@ -286,6 +286,7 @@ class Tower(pygame.sprite.Sprite):
 
     def update(self, dt, enemy_group, bullet_group, tower_levels, passive_levels):
         level = max(1, tower_levels.get(self.tower_id, 1))
+        self.level = level
         original_stats = TOWER_STATS[self.tower_id][level]
 
         stats = original_stats.copy()
@@ -321,7 +322,12 @@ class Tower(pygame.sprite.Sprite):
                     if projs == 1:
                         bullet_group.add(self.projectile_class((self.x, origin_y), closest_enemy.pos, stats))
                     else:
-                        base_dir = (closest_enemy.pos - pygame.math.Vector2(self.x, origin_y)).normalize()
+                        diff = closest_enemy.pos - pygame.math.Vector2(self.x, origin_y)
+                        if diff.length() > 0:
+                            base_dir = diff.normalize()
+                        else:
+                            base_dir = pygame.math.Vector2(1, 0)  # Salvavidas anti-crash
+
                         spread_angle = 15
                         start_angle = - (projs // 2) * spread_angle
                         for i in range(projs):
@@ -375,19 +381,22 @@ class LightningTower(Tower):
         origin_y = self.y - 25
         bullet_group.add(LightningVisual((self.x, origin_y), current_target.pos))
 
+        # Lo sacamos del bucle y arreglamos el orden lógico
+        if self.level == 8:
+            bounce_range = self.range
+        elif self.level >= 3:
+            bounce_range = self.range * 0.9
+        else:
+            bounce_range = self.range * 0.75
+
         for _ in range(stats.get("bounces", 0)):
             next_target = None
             min_dist = float("inf")
-            if self.level >= 3:
-                self.bounce_range = self.range * 0.9
-            elif self.level == 8:
-                self.bounce_range = self.range
-            else:
-                self.bounce_range = self.range * 0.75
 
             for e in enemy_group:
                 if e not in hit_enemies:
                     dist = current_target.pos.distance_to(e.pos)
+                    # Ahora coincide la variable a la perfección
                     if dist <= bounce_range and dist < min_dist:
                         min_dist = dist
                         next_target = e

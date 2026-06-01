@@ -33,29 +33,37 @@ time_scale = 1.0
 config = configparser.ConfigParser()
 config_file = "config.ini"
 
+config = configparser.ConfigParser()
+config_file = "config.ini"
+
 if not os.path.exists(config_file):
     config["Keybinds"] = {
         "slot_1": "1", "slot_2": "2", "slot_3": "3", "slot_4": "4",
-        "wall": "w", "sell": "q", "repair": "e", "repair_all": "r"
+        "wall": "w", "sell": "q", "repair": "e", "repair_all": "r",
+        "toggle_hp": "v"
     }
     config["Settings"] = {
-        "legible_font": "False"
+        "legible_font": "False",
+        "health_bars_mode": "0"
     }
     with open(config_file, "w") as f:
         config.write(f)
 else:
     config.read(config_file)
     if "Settings" not in config:
-        config["Settings"] = {"legible_font": "False"}
+        config["Settings"] = {"legible_font": "False", "health_bars_mode": "0"}
+        with open(config_file, "w") as f:
+            config.write(f)
+    if "toggle_hp" not in config["Keybinds"]:
+        config["Keybinds"]["toggle_hp"] = "v"
         with open(config_file, "w") as f:
             config.write(f)
 
 use_legible_font = config.getboolean("Settings", "legible_font", fallback=False)
-
+health_bars_mode = config.getint("Settings", "health_bars_mode", fallback=0)
 
 def get_key(key_str):
     return getattr(pygame, f"K_{key_str.lower()}")
-
 
 controls = {
     "slot_1": get_key(config["Keybinds"]["slot_1"]),
@@ -65,7 +73,8 @@ controls = {
     "wall": get_key(config["Keybinds"]["wall"]),
     "sell": get_key(config["Keybinds"]["sell"]),
     "repair": get_key(config["Keybinds"]["repair"]),
-    "repair_all": get_key(config["Keybinds"]["repair_all"])
+    "repair_all": get_key(config["Keybinds"]["repair_all"]),
+    "toggle_hp": get_key(config["Keybinds"]["toggle_hp"])
 }
 
 # =====================================================================
@@ -542,6 +551,9 @@ structures_hp = {}
 wall_masks = {}
 ruin_masks = {}
 
+previous_structures_hp = {}
+damage_timers = {}
+
 tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
 
 active_passives = []
@@ -1014,6 +1026,11 @@ while running:
                 elif event.key == controls["slot_4"] and active_towers[3]:
                     t = active_towers[3]
                     current_tool = t if current_tool != t else None
+                elif event.key == controls["toggle_hp"]:
+                    health_bars_mode = (health_bars_mode + 1) % 4
+                    config["Settings"]["health_bars_mode"] = str(health_bars_mode)
+                    with open(config_file, "w") as f:
+                        config.write(f)
             elif game_state == "PAUSED":
                 if event.key == pygame.K_ESCAPE:
                     game_state = "PLAYING"
@@ -1135,6 +1152,104 @@ while running:
 
                 text_surf = ui_font_medium.render(limit_text, True, text_color)
                 gameboard.blit(text_surf, (mouseX + 15, mouseY + 15))
+
+    # === 4. BARRAS DE VIDA Y PRECIO EN EL CURSOR (SELL/REPAIR) ===
+
+        # === 4. BARRAS DE VIDA (DINÁMICAS Y HOVER) ===
+        hp_cells_to_draw = set()
+        hovered_struct = None
+
+        if on_grid and game_state == "PLAYING":
+            if grid[hoverRow][hoverCol] in [wall, turret] and (hoverRow, hoverCol) in structures_hp:
+                # Siempre se muestra si pasamos el ratón sin herramienta, con "sell" o "repair"
+                if current_tool in [None, "sell", "repair"]:
+                    hovered_struct = (hoverRow, hoverCol)
+                    hp_cells_to_draw.add(hovered_struct)
+
+            # Rellenar lista según el modo del config
+            for r in range(row):
+                for c in range(col):
+                    if grid[r][c] in [wall, turret] and (r, c) in structures_hp:
+                        is_tower = (grid[r][c] == turret)
+                        recently_damaged = (r, c) in damage_timers
+
+                        if health_bars_mode == 0 and is_tower and recently_damaged:
+                            hp_cells_to_draw.add((r, c))
+                        elif health_bars_mode == 1 and recently_damaged:
+                            hp_cells_to_draw.add((r, c))
+                        elif health_bars_mode == 2 and is_tower:
+                            hp_cells_to_draw.add((r, c))
+
+        for (r, c) in hp_cells_to_draw:
+            current_hp = structures_hp[(r, c)]
+            hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+            max_hp = 1
+            cell = grid[r][c]
+
+            if cell == wall:
+                max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+            elif cell == turret:
+                t_obj = next((t for t in player_group if
+                              not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == c and int(
+                                  t.y // grid_size) == r), None)
+                if t_obj:
+                    max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_obj.tower_id, 1))] * hp_buff)
+
+            bar_w = 40
+            bx = offsetX + (c * grid_size) + (grid_size // 2) - (bar_w // 2)
+
+            # Movemos la barra a la parte inferior de la casilla (grid_size es 30, barra mide 6)
+            by = (r * grid_size) + grid_size - 15
+
+            # Efecto de desvanecimiento suave si la barra va a desaparecer
+            alpha = 255
+            if health_bars_mode in [0, 1] and (r, c) != hovered_struct and (r, c) in damage_timers:
+                timer = damage_timers[(r, c)]
+                if timer < 1.0:
+                    alpha = int(255 * timer)
+
+            if alpha < 255:
+                hp_surf_bar = pygame.Surface((bar_w, 6), pygame.SRCALPHA)
+                pygame.draw.rect(hp_surf_bar, (255, 0, 0, alpha), (0, 0, bar_w, 6))
+                pygame.draw.rect(hp_surf_bar, (0, 255, 0, alpha),
+                                 (0, 0, max(0, min(bar_w, int((current_hp / max_hp) * bar_w))), 6))
+                pygame.draw.rect(hp_surf_bar, (0, 0, 0, alpha), (0, 0, bar_w, 6), 1)
+                gameboard.blit(hp_surf_bar, (bx, by))
+            else:
+                pygame.draw.rect(gameboard, "red", (bx, by, bar_w, 6))
+                pygame.draw.rect(gameboard, "green",
+                                 (bx, by, max(0, min(bar_w, int((current_hp / max_hp) * bar_w))), 6))
+                pygame.draw.rect(gameboard, "black", (bx, by, bar_w, 6), 1)
+
+            # Si tenemos el ratón encima, dibujamos el texto "93/100" y los costes
+            if (r, c) == hovered_struct:
+                hp_str = f"{int(current_hp)}/{int(max_hp)}"
+                hp_surf = ui_font_small.render(hp_str, True, "white")
+
+                # Colocamos el texto justo encima de la barra
+                text_y = by - 14
+                text_x = bx + (bar_w // 2) - (hp_surf.get_width() // 2)
+
+                for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                    gameboard.blit(ui_font_small.render(hp_str, True, "black"),
+                                   (text_x + dx, text_y + dy))
+                gameboard.blit(hp_surf, (text_x, text_y))
+
+                action_text = ""
+                color_text = "white"
+                if current_tool == "sell":
+                    action_text = "+2 G" if cell == wall else "+10 G"
+                    color_text = "yellow"
+                elif current_tool == "repair":
+                    cost = int((max_hp - current_hp) * 2)
+                    action_text = "Max HP" if current_hp >= max_hp else f"-{cost} G"
+                    color_text = "gray" if current_hp >= max_hp else "red"
+
+                if action_text:
+                    for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                        gameboard.blit(ui_font_medium.render(action_text, True, "black"),
+                                       (mouseX + 15 + dx, mouseY + 15 + dy))
+                    gameboard.blit(ui_font_medium.render(action_text, True, color_text), (mouseX + 15, mouseY + 15))
 
     pygame.draw.rect(gameboard, "#222222", (0, 0, offsetX, 720))
     pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (offsetX + width_gameboard), 720))
@@ -1333,6 +1448,18 @@ while running:
                            current_pool, spawn_cooldown_multiplier)
         enemy_group.update(dt * time_scale, grid, enemy_group=enemy_group, structures_hp=structures_hp,
                            passive_levels=passive_levels, thorns_values=THORNS_VALUES)
+
+        # --- DETECTOR DE DAÑO PARA MOSTRAR BARRAS ---
+        for coords, hp in structures_hp.items():
+            if coords in previous_structures_hp and hp < previous_structures_hp[coords]:
+                damage_timers[coords] = 4
+
+        for coords in list(damage_timers.keys()):
+            damage_timers[coords] -= dt * time_scale
+            if damage_timers[coords] <= 0:
+                del damage_timers[coords]
+
+        previous_structures_hp = structures_hp.copy()
 
         # --- LIMPIEZA DE MUROS DESTRUIDOS Y CREACIÓN DE RUINAS ---
         broken_walls = []
