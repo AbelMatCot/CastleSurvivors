@@ -92,16 +92,60 @@ running = True
 # =====================================================================
 # CAPÍTULO 3: FUNCIONES DE UTILIDAD (ASSETS Y UI)
 # =====================================================================
-def extract_sprite(sheet, column, rw, cols_total, rows_total, crop=True):
+def extract_sprite(sheet, column, rw, cols_total, rows_total, crop=True, crop_x_only=False):
     w = sheet.get_width() // cols_total
     h = sheet.get_height() // rows_total
     sub = sheet.subsurface((column * w, rw * h, w, h))
     if crop:
         bounding = sub.get_bounding_rect()
         if bounding.width > 0 and bounding.height > 0:
-            return sub.subsurface(bounding)
+            if crop_x_only:
+                # Recorta solo a lo ancho, mantiene el alto original
+                return sub.subsurface((bounding.x, 0, bounding.width, h))
+            else:
+                return sub.subsurface(bounding)
     return sub
 
+def get_smart_slices(sheet, cols_total, rows_total):
+    w = sheet.get_width() // cols_total
+    h = sheet.get_height() // rows_total
+
+    bounds = []
+    for r in range(rows_total):
+        row_bounds = []
+        for c in range(cols_total):
+            sub = sheet.subsurface((c * w, r * h, w, h))
+            row_bounds.append(sub.get_bounding_rect())
+        bounds.append(row_bounds)
+
+    # Ajustamos el ancho (X) unificando los márgenes de cada columna
+    col_rects = []
+    for c in range(cols_total):
+        valid_x = [bounds[r][c].x for r in range(rows_total) if bounds[r][c].width > 0]
+        valid_right = [bounds[r][c].right for r in range(rows_total) if bounds[r][c].width > 0]
+        min_x = min(valid_x) if valid_x else 0
+        max_r = max(valid_right) if valid_right else w
+        col_rects.append((min_x, max_r - min_x))
+
+    # Ajustamos el alto (Y) unificando los márgenes de cada fila
+    row_rects = []
+    for r in range(rows_total):
+        valid_y = [bounds[r][c].y for c in range(cols_total) if bounds[r][c].height > 0]
+        valid_bottom = [bounds[r][c].bottom for c in range(cols_total) if bounds[r][c].height > 0]
+        min_y = min(valid_y) if valid_y else 0
+        max_b = max(valid_bottom) if valid_bottom else h
+        row_rects.append((min_y, max_b - min_y))
+
+    parts = []
+    for r in range(rows_total):
+        for c in range(cols_total):
+            cx, cw = col_rects[c]
+            cy, ch = row_rects[r]
+            if cw > 0 and ch > 0:
+                parts.append(sheet.subsurface((c * w + cx, r * h + cy, cw, ch)))
+            else:
+                parts.append(pygame.Surface((1, 1), pygame.SRCALPHA))
+    return parts
 
 def load_ui_icons():
     icons = {}
@@ -148,36 +192,6 @@ def draw_text_wrapped(surface, text, font, color, rect):
         surf = font.render(line, True, color)
         surface.blit(surf, (rect.x, y_offset))
         y_offset += font.get_linesize()
-
-
-def draw_paper(surface, sheet, rect):
-    parts = [extract_sprite(sheet, c, r, 3, 3) for r in range(3) for c in range(3)]
-    tl, tc, tr = parts[0], parts[1], parts[2]
-    ml, mc, mr = parts[3], parts[4], parts[5]
-    bl, bc, br = parts[6], parts[7], parts[8]
-
-    scale = 2
-    cw, ch = tl.get_width() * scale, tl.get_height() * scale
-    cw = min(cw, rect.width // 2)
-    ch = min(ch, rect.height // 2)
-
-    mid_w = max(0, rect.width - cw * 2)
-    mid_h = max(0, rect.height - ch * 2)
-
-    def blit_safe(part, dx, dy, dw, dh):
-        if dw > 0 and dh > 0:
-            surface.blit(pygame.transform.scale(part, (int(dw), int(dh))), (int(dx), int(dy)))
-
-    blit_safe(tl, rect.x, rect.y, cw, ch)
-    blit_safe(tc, rect.x + cw, rect.y, mid_w, ch)
-    blit_safe(tr, rect.right - cw, rect.y, cw, ch)
-    blit_safe(ml, rect.x, rect.y + ch, cw, mid_h)
-    blit_safe(mc, rect.x + cw, rect.y + ch, mid_w, mid_h)
-    blit_safe(mr, rect.right - cw, rect.y + ch, cw, mid_h)
-    blit_safe(bl, rect.x, rect.bottom - ch, cw, ch)
-    blit_safe(bc, rect.x + cw, rect.bottom - ch, mid_w, ch)
-    blit_safe(br, rect.right - cw, rect.bottom - ch, cw, ch)
-
 
 def draw_9_slice_button(surface, image, rect, edge_px=8):
     w, h = image.get_size()
@@ -231,20 +245,108 @@ def draw_bar(surface, x, y, w, h, ratio, base_sheet, fill_sheet):
         surface.blit(pygame.transform.scale(fill_crop, (fill_w, inner_h)), (x + pad_x, y + pad_y))
 
 
+def draw_paper(surface, sheet, rect):
+    parts = get_smart_slices(sheet, 3, 3)
+    scale = 2
+
+    # Escalamos las piezas base primero sin deformarlas
+    def s(img):
+        if img.get_width() <= 0 or img.get_height() <= 0: return img
+        return pygame.transform.scale(img, (img.get_width() * scale, img.get_height() * scale))
+
+    tl, tc, tr = s(parts[0]), s(parts[1]), s(parts[2])
+    ml, mc, mr = s(parts[3]), s(parts[4]), s(parts[5])
+    bl, bc, br = s(parts[6]), s(parts[7]), s(parts[8])
+
+    # Protegemos que las esquinas no se solapen si el rect es muy pequeño
+    cw_l, cw_r = min(tl.get_width(), rect.width // 2), min(tr.get_width(), rect.width // 2)
+    ch_t, ch_b = min(tl.get_height(), rect.height // 2), min(bl.get_height(), rect.height // 2)
+
+    mid_w = max(0, rect.width - cw_l - cw_r)
+    mid_h = max(0, rect.height - ch_t - ch_b)
+
+    # 1. ESQUINAS INTACTAS
+    if cw_l > 0 and ch_t > 0: surface.blit(pygame.transform.scale(tl, (cw_l, ch_t)), (rect.x, rect.y))
+    if cw_r > 0 and ch_t > 0: surface.blit(pygame.transform.scale(tr, (cw_r, ch_t)), (rect.right - cw_r, rect.y))
+    if cw_l > 0 and ch_b > 0: surface.blit(pygame.transform.scale(bl, (cw_l, ch_b)), (rect.x, rect.bottom - ch_b))
+    if cw_r > 0 and ch_b > 0: surface.blit(pygame.transform.scale(br, (cw_r, ch_b)),
+                                           (rect.right - cw_r, rect.bottom - ch_b))
+
+    # 2. BORDES HORIZONTALES (Tiling horizontal)
+    if mid_w > 0:
+        tc_w = max(1, tc.get_width())
+        reps_x = max(1, int((mid_w / tc_w) + 0.5))
+        chunk_w, rem_x = divmod(mid_w, reps_x)
+
+        curr_x = rect.x + cw_l
+        for i in range(reps_x):
+            w = chunk_w + (1 if i < rem_x else 0)
+            if w > 0:
+                if ch_t > 0: surface.blit(pygame.transform.scale(tc, (w, ch_t)), (curr_x, rect.y))
+                if ch_b > 0: surface.blit(pygame.transform.scale(bc, (w, ch_b)), (curr_x, rect.bottom - ch_b))
+                curr_x += w
+
+    # 3. BORDES VERTICALES (Tiling vertical)
+    if mid_h > 0:
+        ml_h = max(1, ml.get_height())
+        reps_y = max(1, int((mid_h / ml_h) + 0.5))
+        chunk_h, rem_y = divmod(mid_h, reps_y)
+
+        curr_y = rect.y + ch_t
+        for i in range(reps_y):
+            h = chunk_h + (1 if i < rem_y else 0)
+            if h > 0:
+                if cw_l > 0: surface.blit(pygame.transform.scale(ml, (cw_l, h)), (rect.x, curr_y))
+                if cw_r > 0: surface.blit(pygame.transform.scale(mr, (cw_r, h)), (rect.right - cw_r, curr_y))
+                curr_y += h
+
+    # 4. CENTRO (Tiling en cuadrícula bidimensional)
+    if mid_w > 0 and mid_h > 0:
+        mc_w, mc_h = max(1, mc.get_width()), max(1, mc.get_height())
+        reps_x = max(1, int((mid_w / mc_w) + 0.5))
+        reps_y = max(1, int((mid_h / mc_h) + 0.5))
+        chunk_w, rem_x = divmod(mid_w, reps_x)
+        chunk_h, rem_y = divmod(mid_h, reps_y)
+
+        curr_y = rect.y + ch_t
+        for y_idx in range(reps_y):
+            h = chunk_h + (1 if y_idx < rem_y else 0)
+            curr_x = rect.x + cw_l
+            for x_idx in range(reps_x):
+                w = chunk_w + (1 if x_idx < rem_x else 0)
+                if w > 0 and h > 0:
+                    surface.blit(pygame.transform.scale(mc, (w, h)), (curr_x, curr_y))
+                curr_x += w
+            curr_y += h
+
 def draw_ribbon(surface, x, y, w, h, sheet, rw=0, rows_total=2):
-    left = extract_sprite(sheet, 0, rw, 3, rows_total, crop=True)
-    mid = extract_sprite(sheet, 1, rw, 3, rows_total, crop=True)
-    right = extract_sprite(sheet, 2, rw, 3, rows_total, crop=True)
+    # Usamos el recorte inteligente en cuadrícula 3xN
+    parts = get_smart_slices(sheet, 3, rows_total)
+    left = parts[rw * 3 + 0]
+    mid = parts[rw * 3 + 1]
+    right = parts[rw * 3 + 2]
 
     edge_w_l = int(h * (left.get_width() / max(1, left.get_height())))
     edge_w_r = int(h * (right.get_width() / max(1, right.get_height())))
     mid_w = max(0, w - (edge_w_l + edge_w_r))
 
     surface.blit(pygame.transform.scale(left, (edge_w_l, h)), (x, y))
-    if mid_w > 0:
-        surface.blit(pygame.transform.scale(mid, (mid_w, h)), (x + edge_w_l, y))
-    surface.blit(pygame.transform.scale(right, (edge_w_r, h)), (x + edge_w_l + mid_w, y))
 
+    if mid_w > 0:
+        mid_base_w = max(1, int(h * (mid.get_width() / max(1, mid.get_height()))))
+        reps = max(1, int((mid_w / mid_base_w) + 0.5))
+
+        chunk_w = mid_w // reps
+        remainder = mid_w % reps
+
+        curr_x = x + edge_w_l
+        for i in range(reps):
+            cw = chunk_w + (1 if i < remainder else 0)
+            if cw > 0:
+                surface.blit(pygame.transform.scale(mid, (cw, h)), (curr_x, y))
+                curr_x += cw
+
+    surface.blit(pygame.transform.scale(right, (edge_w_r, h)), (x + edge_w_l + mid_w, y))
 
 def draw_slot(x, y, size, key_text, cost=None, is_pressed=False, t_id=None):
     img = btn_small_pressed_img if is_pressed else btn_small_img
@@ -317,6 +419,51 @@ def draw_action_btn(x, y, w, h, key_text, label, cost=None, is_pressed=False):
 # =====================================================================
 # CAPÍTULO 4: CARGA DE RECURSOS (ASSETS Y FUENTES)
 # =====================================================================
+
+class TowerSmoke(pygame.sprite.Sprite):
+    def __init__(self, x, y, goes_right=False):
+        super().__init__()
+        self.frames = []
+        if smoke_sheet:
+            w = smoke_sheet.get_width()
+            h = smoke_sheet.get_height()
+
+            # Ajuste mágico: dividimos el ancho total entre los fotogramas.
+            # A ojo parecen 9, pero si ves que parpadea algo, cámbialo a 8 o 10.
+            num_frames = 9
+            frame_w = w // num_frames
+
+            for i in range(num_frames):
+                frame = pygame.Surface((frame_w, h), pygame.SRCALPHA)
+                frame.blit(smoke_sheet, (0, 0), (i * frame_w, 0, frame_w, h))
+
+                # Si queremos que vaya a la derecha, lo volteamos
+                if goes_right:
+                    frame = pygame.transform.flip(frame, True, False)
+
+                frame = pygame.transform.scale(frame, (frame_w * 2, h * 2))
+                self.frames.append(frame)
+        else:
+            self.frames.append(pygame.Surface((0, 0)))
+
+        self.current_frame = 0
+        self.image = self.frames[0]
+
+        # Separamos la onda expansiva del centro
+        offset_x = 20 if goes_right else -20
+        self.rect = self.image.get_rect(midbottom=(x + offset_x, y))
+        self.timer = 0.0
+
+    def update(self, dt):
+        self.timer += dt
+        if self.timer >= 0.05:
+            self.timer = 0.0
+            self.current_frame += 1
+            if self.current_frame < len(self.frames):
+                self.image = self.frames[self.current_frame]
+            else:
+                self.kill()
+
 ui_font_large = None
 ui_font_medium = None
 ui_font_small = None
@@ -406,7 +553,9 @@ except FileNotFoundError:
     sys.exit()
 
 explosion_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "Explosion_01.png")).convert_alpha()
-dust_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "Dust_02.png")).convert_alpha()
+dust_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "breaksmoke.png")).convert_alpha()
+smoke_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "buildsmoke.png")).convert_alpha()
+wallsmoke_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "wallsmoke.png")).convert_alpha()
 
 ui_path = os.path.join("Assets", "UI")
 try:
@@ -553,6 +702,7 @@ ruin_masks = {}
 
 previous_structures_hp = {}
 damage_timers = {}
+previous_structures_types = {}
 
 tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
 
@@ -580,6 +730,7 @@ random_time_2 = random.uniform(910, 1040)
 spawn_schedule.extend([(random_time_1, "balanced"), (random_time_2, "balanced"), (1050, "wildcard")])
 spawn_schedule.sort(key=lambda x: x[0])
 
+last_built_cell = None
 
 # =====================================================================
 # CAPÍTULO 6: FUNCIONES DE LÓGICA DE JUEGO
@@ -647,7 +798,7 @@ def setup_spawn_point(spwn_grp, spawn_type="balanced"):
 
     offsets = [(0, 0, 0.0), (-14, 8, 0.15), (14, 18, 0.3)]
     for ox, oy, dly in offsets:
-        dust = Effect(fx_base + ox, fy_base + oy, dust_sheet, scale_size=60, fps=12, delay=dly)
+        dust = Effect(fx_base + ox, fy_base + oy, dust_sheet, scale_size=70, fps=11, delay=dly)
         effects_group.add(dust)
 
 
@@ -825,6 +976,8 @@ while running:
     if on_grid:
         hoverCol = (mouseX - offsetX) // grid_size
         hoverRow = mouseY // grid_size
+        if last_built_cell and last_built_cell != (hoverRow, hoverCol):
+            last_built_cell = None
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -885,20 +1038,47 @@ while running:
                                             active_towers[idx] = t_id
                                             break
 
-                            elif chosen["type"] == "unlock_passive":
+                            elif chosen["type"] in ["unlock_passive", "upgrade_passive"]:
                                 p_id = chosen["id"]
-                                active_passives.append(p_id)
-                                passive_levels[p_id] = 1
-                                if p_id == "health":
-                                    castle_max_hp += int(castle_max_hp * 0.05)
-                                    castle_hp += int(castle_max_hp * 0.05)
 
-                            elif chosen["type"] == "upgrade_passive":
-                                p_id = chosen["id"]
-                                passive_levels[p_id] += 1
+                                # Guardamos el multiplicador antiguo antes de tocar nada
+                                old_hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+
+                                if chosen["type"] == "unlock_passive":
+                                    active_passives.append(p_id)
+                                    passive_levels[p_id] = 1
+                                else:
+                                    passive_levels[p_id] += 1
+
+                                # Solo recalculamos vidas si la carta era de salud
                                 if p_id == "health":
-                                    castle_max_hp += int(castle_max_hp * 0.05)
-                                    castle_hp += int(castle_max_hp * 0.05)
+                                    new_hp_buff = 1.0 + (passive_levels["health"] * 0.05) + meta_health
+
+                                    # 1. Ajuste perfecto para el Castillo
+                                    old_castle_max = int((100 + (player_level * 18)) * old_hp_buff)
+                                    new_castle_max = int((100 + (player_level * 18)) * new_hp_buff)
+                                    castle_max_hp = new_castle_max
+                                    castle_hp += (new_castle_max - old_castle_max)
+
+                                    # 2. Rellenar la "vida vacía" de Muros y Torres
+                                    for coords in list(structures_hp.keys()):
+                                        r, c = coords
+                                        cell = grid[r][c]
+
+                                        if cell == wall:
+                                            old_max = int((25 + (player_level * 1.5)) * old_hp_buff)
+                                            new_max = int((25 + (player_level * 1.5)) * new_hp_buff)
+                                            structures_hp[coords] += (new_max - old_max)
+
+                                        elif cell == turret:
+                                            # Buscamos la torre exacta para saber su nivel actual
+                                            t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
+                                            if t_obj:
+                                                t_id = t_obj.tower_id
+                                                lvl = max(1, tower_levels.get(t_id, 1))
+                                                old_max = int(TOWER_BASE_HP[lvl] * old_hp_buff)
+                                                new_max = int(TOWER_BASE_HP[lvl] * new_hp_buff)
+                                                structures_hp[coords] += (new_max - old_max)
 
                             elif chosen["type"] == "heal":
                                 castle_hp = min(castle_max_hp, castle_hp + (castle_max_hp // 2))
@@ -921,28 +1101,80 @@ while running:
                 if current_tool == "sell":
                     if grid[hoverRow][hoverCol] in [wall, turret]:
                         cell_type = grid[hoverRow][hoverCol]
-                        grid[hoverRow][hoverCol] = allow
                         coords = (hoverRow, hoverCol)
-                        if coords in structures_hp: del structures_hp[coords]
+                        if coords in structures_hp:
+                            current_hp = structures_hp[coords]
+                            hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
 
-                        if cell_type == wall:
-                            player_gold += 2
-                            # Borramos su dibujo y actualizamos los de alrededor
-                            if coords in wall_masks: del wall_masks[coords]
-                            update_neighbors_walls(hoverRow, hoverCol)
-                        elif cell_type == turret:
-                            for t in player_group:
-                                if getattr(t, "is_castle", False): continue
-                                if hasattr(t, "x") and hasattr(t, "y"):
-                                    t_col = int((t.x - offsetX) // grid_size)
-                                    t_row = int(t.y // grid_size)
-                                    if t_col == hoverCol and t_row == hoverRow:
-                                        t.kill()
-                                        player_gold += 10
-                                        break
-                        # --- BORRAR RUINAS ---
-                        elif (hoverRow, hoverCol) in ruin_masks:
-                            del ruin_masks[(hoverRow, hoverCol)]
+                            if cell_type == wall:
+                                max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+                                total_value = min(50, 10 + int(player_level * 0.8))
+                                target_obj = None
+                            else:
+                                target_obj = next((t for t in player_group if
+                                                   not getattr(t, "is_castle", False) and int(
+                                                       (t.x - offsetX) // grid_size) == hoverCol and int(
+                                                       t.y // grid_size) == hoverRow), None)
+                                if target_obj:
+                                    t_id = target_obj.tower_id
+                                    max_hp = int(TOWER_BASE_HP[max(1, tower_levels[t_id])] * hp_buff)
+                                    total_value = TOWER_STATS[t_id][max(1, tower_levels[t_id])]["cost"]
+                                else:
+                                    max_hp = 1;
+                                    total_value = 0
+
+                            # Mates de Wall Street: Depreciación por daño y reembolso del 25%
+                            current_value = total_value * (current_hp / max_hp)
+                            player_gold += int(current_value * 0.25)
+
+                            grid[hoverRow][hoverCol] = allow
+                            del structures_hp[coords]
+
+                            if cell_type == wall:
+                                if coords in wall_masks: del wall_masks[coords]
+                                update_neighbors_walls(hoverRow, hoverCol)
+                            elif cell_type == turret and target_obj:
+                                target_obj.kill()
+
+                    elif (hoverRow, hoverCol) in ruin_masks:
+                        del ruin_masks[(hoverRow, hoverCol)]
+                        update_neighbors_walls(hoverRow, hoverCol)
+
+                        fx_x = offsetX + (hoverCol * grid_size) + (grid_size // 2)
+                        fx_y = (hoverRow * grid_size) + (grid_size // 2)
+                        effects_group.add(Effect(fx_x, fx_y, wallsmoke_sheet, scale_size=60, fps=15, num_frames=7))
+
+                elif current_tool == "repair":
+                    if grid[hoverRow][hoverCol] in [wall, turret]:
+                        cell_type = grid[hoverRow][hoverCol]
+                        coords = (hoverRow, hoverCol)
+                        if coords in structures_hp:
+                            current_hp = structures_hp[coords]
+                            hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+
+                            if cell_type == wall:
+                                max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+                                total_value = min(50, 10 + int(player_level * 0.8))
+                            else:
+                                target_obj = next((t for t in player_group if
+                                                   not getattr(t, "is_castle", False) and int(
+                                                       (t.x - offsetX) // grid_size) == hoverCol and int(
+                                                       t.y // grid_size) == hoverRow), None)
+                                if target_obj:
+                                    t_id = target_obj.tower_id
+                                    max_hp = int(TOWER_BASE_HP[max(1, tower_levels[t_id])] * hp_buff)
+                                    total_value = TOWER_STATS[t_id][max(1, tower_levels[t_id])]["cost"]
+                                else:
+                                    max_hp = 1;
+                                    total_value = 0
+
+                            if current_hp < max_hp:
+                                # Coste de reparación dinámico (75% del valor perdido)
+                                current_value = total_value * (current_hp / max_hp)
+                                repair_price = int((total_value - current_value) * 0.75)
+                                if player_gold >= repair_price:
+                                    player_gold -= repair_price
+                                    structures_hp[coords] = max_hp
 
                 elif grid[hoverRow][hoverCol] == allow:
                     hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
@@ -958,6 +1190,10 @@ while running:
                                 del ruin_masks[(hoverRow, hoverCol)]
 
                             update_neighbors_walls(hoverRow, hoverCol)
+
+                            posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
+                            posY_px = (hoverRow * grid_size) + (grid_size // 2)
+                            effects_group.add(Effect(posX_px, posY_px, dust_sheet, scale_size=55, fps=11))
 
                     elif current_tool in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
                         lvl = tower_levels[current_tool]
@@ -988,6 +1224,13 @@ while running:
                                     player_group.add(LightningTower(posX_px, posY_px))
                                 elif current_tool == "thorns":
                                     player_group.add(ThornsTower(posX_px, posY_px))
+
+                                # --- CREAR LA ONDA EXPANSIVA ---
+                                base_y = (hoverRow * grid_size) + grid_size
+                                effects_group.add(TowerSmoke(posX_px, base_y, goes_right=False))  # Humo izquierdo
+                                effects_group.add(TowerSmoke(posX_px, base_y, goes_right=True))  # Humo derecho
+
+                                last_built_cell = (hoverRow, hoverCol)
 
         if event.type == pygame.MOUSEBUTTONUP:
             if game_state == "PAUSED":
@@ -1114,7 +1357,7 @@ while running:
     effects_group.draw(gameboard)
 
     # === 3. PINTAMOS LA TORRE/MURO FANTASMA Y TEXTO LÍMITE ===
-    if on_grid and game_state == "PLAYING":
+    if on_grid and game_state == "PLAYING" and last_built_cell != (hoverRow, hoverCol):
         posX_trans = offsetX + (hoverCol * grid_size)
         posY_trans = hoverRow * grid_size
         current_cell = grid[hoverRow][hoverCol]
@@ -1154,113 +1397,122 @@ while running:
                 gameboard.blit(text_surf, (mouseX + 15, mouseY + 15))
 
     # === 4. BARRAS DE VIDA Y PRECIO EN EL CURSOR (SELL/REPAIR) ===
+    hp_cells_to_draw = set()
+    hovered_struct = None
 
-        # === 4. BARRAS DE VIDA (DINÁMICAS Y HOVER) ===
-        hp_cells_to_draw = set()
-        hovered_struct = None
+    if on_grid and game_state == "PLAYING":
+        if grid[hoverRow][hoverCol] in [wall, turret] and (hoverRow, hoverCol) in structures_hp:
+            # Siempre se muestra si pasamos el ratón sin herramienta, con "sell" o "repair"
+            if current_tool in [None, "sell", "repair"]:
+                hovered_struct = (hoverRow, hoverCol)
+                hp_cells_to_draw.add(hovered_struct)
 
-        if on_grid and game_state == "PLAYING":
-            if grid[hoverRow][hoverCol] in [wall, turret] and (hoverRow, hoverCol) in structures_hp:
-                # Siempre se muestra si pasamos el ratón sin herramienta, con "sell" o "repair"
-                if current_tool in [None, "sell", "repair"]:
-                    hovered_struct = (hoverRow, hoverCol)
-                    hp_cells_to_draw.add(hovered_struct)
+        # Rellenar lista según el modo del config
+        for r in range(row):
+            for c in range(col):
+                if grid[r][c] in [wall, turret] and (r, c) in structures_hp:
+                    is_tower = (grid[r][c] == turret)
+                    recently_damaged = (r, c) in damage_timers
 
-            # Rellenar lista según el modo del config
-            for r in range(row):
-                for c in range(col):
-                    if grid[r][c] in [wall, turret] and (r, c) in structures_hp:
-                        is_tower = (grid[r][c] == turret)
-                        recently_damaged = (r, c) in damage_timers
+                    if health_bars_mode == 0 and is_tower and recently_damaged:
+                        hp_cells_to_draw.add((r, c))
+                    elif health_bars_mode == 1 and recently_damaged:
+                        hp_cells_to_draw.add((r, c))
+                    elif health_bars_mode == 2 and is_tower:
+                        hp_cells_to_draw.add((r, c))
 
-                        if health_bars_mode == 0 and is_tower and recently_damaged:
-                            hp_cells_to_draw.add((r, c))
-                        elif health_bars_mode == 1 and recently_damaged:
-                            hp_cells_to_draw.add((r, c))
-                        elif health_bars_mode == 2 and is_tower:
-                            hp_cells_to_draw.add((r, c))
+    for (r, c) in hp_cells_to_draw:
+        current_hp = structures_hp[(r, c)]
+        hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+        max_hp = 1
+        cell = grid[r][c]
+        t_obj = None  # Salvavidas para que no falle luego
 
-        for (r, c) in hp_cells_to_draw:
-            current_hp = structures_hp[(r, c)]
-            hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
-            max_hp = 1
-            cell = grid[r][c]
+        if cell == wall:
+            max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+        elif cell == turret:
+            t_obj = next((t for t in player_group if
+                          not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == c and int(
+                              t.y // grid_size) == r), None)
+            if t_obj:
+                max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_obj.tower_id, 1))] * hp_buff)
 
+        bar_w = 40
+        bx = offsetX + (c * grid_size) + (grid_size // 2) - (bar_w // 2)
+
+        # Movemos la barra a la parte inferior de la casilla (grid_size es 30, barra mide 6)
+        by = (r * grid_size) + grid_size - 15
+
+        # Efecto de desvanecimiento suave si la barra va a desaparecer
+        alpha = 255
+        if health_bars_mode in [0, 1] and (r, c) != hovered_struct and (r, c) in damage_timers:
+            timer = damage_timers[(r, c)]
+            if timer < 1.0:
+                alpha = int(255 * timer)
+
+        if alpha < 255:
+            hp_surf_bar = pygame.Surface((bar_w, 6), pygame.SRCALPHA)
+            pygame.draw.rect(hp_surf_bar, (255, 0, 0, alpha), (0, 0, bar_w, 6))
+            pygame.draw.rect(hp_surf_bar, (0, 255, 0, alpha),
+                             (0, 0, max(0, min(bar_w, int((current_hp / max_hp) * bar_w))), 6))
+            pygame.draw.rect(hp_surf_bar, (0, 0, 0, alpha), (0, 0, bar_w, 6), 1)
+            gameboard.blit(hp_surf_bar, (bx, by))
+        else:
+            pygame.draw.rect(gameboard, "red", (bx, by, bar_w, 6))
+            pygame.draw.rect(gameboard, "green",
+                             (bx, by, max(0, min(bar_w, int((current_hp / max_hp) * bar_w))), 6))
+            pygame.draw.rect(gameboard, "black", (bx, by, bar_w, 6), 1)
+
+        # Si tenemos el ratón encima, dibujamos el texto "93/100" y los costes
+        if (r, c) == hovered_struct:
+            hp_str = f"{int(current_hp)}/{int(max_hp)}"
+            hp_surf = ui_font_small.render(hp_str, True, "white")
+
+            text_y = by - 14
+            text_x = bx + (bar_w // 2) - (hp_surf.get_width() // 2)
+
+            for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                gameboard.blit(ui_font_small.render(hp_str, True, "black"), (text_x + dx, text_y + dy))
+            gameboard.blit(hp_surf, (text_x, text_y))
+
+            # --- NUEVO: CÁLCULO DE VALORES DE MERCADO ---
+            total_value = 0
             if cell == wall:
-                max_hp = int((25 + (player_level * 1.5)) * hp_buff)
-            elif cell == turret:
-                t_obj = next((t for t in player_group if
-                              not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == c and int(
-                                  t.y // grid_size) == r), None)
-                if t_obj:
-                    max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_obj.tower_id, 1))] * hp_buff)
+                total_value = min(50, 10 + int(player_level * 0.8))
+            elif cell == turret and t_obj:
+                total_value = TOWER_STATS[t_obj.tower_id][max(1, tower_levels.get(t_obj.tower_id, 1))]["cost"]
 
-            bar_w = 40
-            bx = offsetX + (c * grid_size) + (grid_size // 2) - (bar_w // 2)
+            current_value = total_value * (current_hp / max_hp)
+            sell_price = int(current_value * 0.25)
+            repair_price = int((total_value - current_value) * 0.75)
 
-            # Movemos la barra a la parte inferior de la casilla (grid_size es 30, barra mide 6)
-            by = (r * grid_size) + grid_size - 15
+            action_text = ""
+            color_text = "white"
+            if current_tool == "sell":
+                action_text = f"+{sell_price} G"
+                color_text = "yellow"
+            elif current_tool == "repair":
+                action_text = "Max HP" if current_hp >= max_hp else f"-{repair_price} G"
+                color_text = "gray" if current_hp >= max_hp else "red"
 
-            # Efecto de desvanecimiento suave si la barra va a desaparecer
-            alpha = 255
-            if health_bars_mode in [0, 1] and (r, c) != hovered_struct and (r, c) in damage_timers:
-                timer = damage_timers[(r, c)]
-                if timer < 1.0:
-                    alpha = int(255 * timer)
-
-            if alpha < 255:
-                hp_surf_bar = pygame.Surface((bar_w, 6), pygame.SRCALPHA)
-                pygame.draw.rect(hp_surf_bar, (255, 0, 0, alpha), (0, 0, bar_w, 6))
-                pygame.draw.rect(hp_surf_bar, (0, 255, 0, alpha),
-                                 (0, 0, max(0, min(bar_w, int((current_hp / max_hp) * bar_w))), 6))
-                pygame.draw.rect(hp_surf_bar, (0, 0, 0, alpha), (0, 0, bar_w, 6), 1)
-                gameboard.blit(hp_surf_bar, (bx, by))
-            else:
-                pygame.draw.rect(gameboard, "red", (bx, by, bar_w, 6))
-                pygame.draw.rect(gameboard, "green",
-                                 (bx, by, max(0, min(bar_w, int((current_hp / max_hp) * bar_w))), 6))
-                pygame.draw.rect(gameboard, "black", (bx, by, bar_w, 6), 1)
-
-            # Si tenemos el ratón encima, dibujamos el texto "93/100" y los costes
-            if (r, c) == hovered_struct:
-                hp_str = f"{int(current_hp)}/{int(max_hp)}"
-                hp_surf = ui_font_small.render(hp_str, True, "white")
-
-                # Colocamos el texto justo encima de la barra
-                text_y = by - 14
-                text_x = bx + (bar_w // 2) - (hp_surf.get_width() // 2)
-
+            if action_text:
                 for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
-                    gameboard.blit(ui_font_small.render(hp_str, True, "black"),
-                                   (text_x + dx, text_y + dy))
-                gameboard.blit(hp_surf, (text_x, text_y))
-
-                action_text = ""
-                color_text = "white"
-                if current_tool == "sell":
-                    action_text = "+2 G" if cell == wall else "+10 G"
-                    color_text = "yellow"
-                elif current_tool == "repair":
-                    cost = int((max_hp - current_hp) * 2)
-                    action_text = "Max HP" if current_hp >= max_hp else f"-{cost} G"
-                    color_text = "gray" if current_hp >= max_hp else "red"
-
-                if action_text:
-                    for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
-                        gameboard.blit(ui_font_medium.render(action_text, True, "black"),
-                                       (mouseX + 15 + dx, mouseY + 15 + dy))
-                    gameboard.blit(ui_font_medium.render(action_text, True, color_text), (mouseX + 15, mouseY + 15))
+                    gameboard.blit(ui_font_medium.render(action_text, True, "black"),
+                                   (mouseX + 15 + dx, mouseY + 15 + dy))
+                gameboard.blit(ui_font_medium.render(action_text, True, color_text), (mouseX + 15, mouseY + 15))
 
     pygame.draw.rect(gameboard, "#222222", (0, 0, offsetX, 720))
     pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (offsetX + width_gameboard), 720))
 
-    clock_rect = pygame.Rect(75, 40, 120, 60)
+    clock_rect = pygame.Rect(75, 35, 120, 75)
     draw_paper(gameboard, special_paper_sheet, clock_rect)
 
     time_str = f"{current_minute:02d}:{int(game_time % 60):02d}"
     time_surf = ui_font_large.render(time_str, True, "white")
-    gameboard.blit(time_surf,
-                   (clock_rect.centerx - time_surf.get_width() // 2, clock_rect.centery - time_surf.get_height() // 2))
+    text_x = clock_rect.centerx - time_surf.get_width() // 2
+    text_y = (clock_rect.centery - time_surf.get_height() // 2) + 4
+
+    gameboard.blit(time_surf, (text_x, text_y))
 
     hp_ratio = max(0, castle_hp / castle_max_hp)
     draw_bar(gameboard, 25, 140, 220, 35, hp_ratio, big_bar_base, big_bar_fill)
@@ -1459,7 +1711,23 @@ while running:
             if damage_timers[coords] <= 0:
                 del damage_timers[coords]
 
+        # --- DETECTOR DE ESTRUCTURAS ROTAS O VENDIDAS ---
+        for coords in previous_structures_hp.keys():
+            if coords not in structures_hp:
+                fx_x = offsetX + (coords[1] * grid_size) + (grid_size // 2)
+                fx_y = (coords[0] * grid_size) + (grid_size // 2)
+
+                # Comprobamos qué era antes de ser borrado
+                if previous_structures_types.get(coords) == wall:
+                    # Humo de muro (dust_sheet es tu breaksmoke)
+                    effects_group.add(Effect(fx_x, fx_y, dust_sheet, scale_size=55, fps=15))
+                else:
+                    # Humo de torre
+                    effects_group.add(Effect(fx_x, fx_y, dust_sheet, scale_size=100, fps=15))
+
+        # Actualizamos las memorias para el siguiente frame
         previous_structures_hp = structures_hp.copy()
+        previous_structures_types = {coords: grid[coords[0]][coords[1]] for coords in structures_hp.keys()}
 
         # --- LIMPIEZA DE MUROS DESTRUIDOS Y CREACIÓN DE RUINAS ---
         broken_walls = []

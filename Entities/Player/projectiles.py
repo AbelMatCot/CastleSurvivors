@@ -1,7 +1,10 @@
 import pygame
 import os
+import math
 
+arrow_img = None
 fireball_imgs = {}
+kunai_img = None
 
 class Projectile(pygame.sprite.Sprite):
     def __init__(self, start_pos, target_pos, speed, size, color, stats):
@@ -35,8 +38,19 @@ class Projectile(pygame.sprite.Sprite):
 
 class Arrow(Projectile):
     def __init__(self, start_pos, target_pos, stats):
-        super().__init__(start_pos, target_pos, speed=350.0, size=6, color="black", stats=stats)
+        super().__init__(start_pos, target_pos, speed=400.0, size=6, color="black", stats=stats)
 
+        global arrow_img
+        # Cargamos la imagen solo cuando se dispara la primera flecha de la partida (la ventana ya existira)
+        if arrow_img is None:
+            arrow_img = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "arrow.png")).convert_alpha()
+
+        # Magia trigonometrica para sacar el angulo (usando tu variable self.dir)
+        angle = math.degrees(math.atan2(-self.dir.y, self.dir.x))
+
+        # Rotamos la imagen y actualizamos su rect en la posicion exacta del proyectil
+        self.image = pygame.transform.rotate(arrow_img, angle)
+        self.rect = self.image.get_rect(center=(round(self.pos.x), round(self.pos.y)))
 
 class Fireball(Projectile):
     def __init__(self, start_pos, target_pos, stats):
@@ -73,4 +87,15 @@ class Fireball(Projectile):
 
 class Kunai(Projectile):
     def __init__(self, start_pos, target_pos, stats):
-        super().__init__(start_pos, target_pos, speed=400.0, size=4, color="gray", stats=stats)
+        super().__init__(start_pos, target_pos, speed=350.0, size=4, color="gray", stats=stats)
+
+        global kunai_img
+        if kunai_img is None:
+            kunai_img = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "kunai.png")).convert_alpha()
+
+        # Calculamos el ángulo hacia el objetivo
+        angle = math.degrees(math.atan2(-self.dir.y, self.dir.x))
+
+        # Rotamos y centramos
+        self.image = pygame.transform.rotate(kunai_img, angle)
+        self.rect = self.image.get_rect(center=(round(self.pos.x), round(self.pos.y)))
