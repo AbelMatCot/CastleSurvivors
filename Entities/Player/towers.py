@@ -308,6 +308,8 @@ class Tower(pygame.sprite.Sprite):
             tower_pos = pygame.math.Vector2(self.x, self.y)
 
             for enemy in enemy_group:
+                if getattr(enemy, "is_dying", False) or getattr(enemy, "is_untargetable", False) or enemy.health <= 0:
+                    continue
                 dist = tower_pos.distance_to(enemy.pos)
                 if dist < min_dist and dist <= self.range:
                     min_dist = dist
@@ -394,6 +396,8 @@ class LightningTower(Tower):
             min_dist = float("inf")
 
             for e in enemy_group:
+                if getattr(e, "is_dying", False) or e.health <= 0:
+                    continue
                 if e not in hit_enemies:
                     dist = current_target.pos.distance_to(e.pos)
                     # Ahora coincide la variable a la perfección

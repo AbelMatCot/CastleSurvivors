@@ -674,7 +674,7 @@ PASSIVE_DESCRIPTIONS = {
 }
 
 ENEMY_WEIGHTS = {
-    "Basic": 1.0, "Fast": 1.0, "Swarmer": 0.5,
+    "Basic": 1.0, "Fast": 1.0, "Swarmer": 0,
     "Shooter": 2.0, "Flyer": 2.0, "Tank": 4.0, "Generator": 15.0
 }
 
@@ -1345,7 +1345,7 @@ while running:
         if type(bullet).__name__ in ["IceBeamVisual", "LightningVisual"]:
             living_entities.append(bullet)
 
-    living_entities.sort(key=lambda entity: entity.rect.bottom)
+    living_entities.sort(key=lambda entity: getattr(entity, "y_sort", entity.rect.bottom))
 
     for entity in living_entities:
         gameboard.blit(entity.image, entity.rect)
@@ -1756,6 +1756,10 @@ while running:
 
         collisions = pygame.sprite.groupcollide(enemy_group, enemy_group, False, False)
         for enemy, others in collisions.items():
+            # --- NUEVO: FILTRO DE FÍSICAS (Ignoramos Hojas, Árboles y Paracaidistas) ---
+            if type(enemy).__name__ in ["AttachedLeaf", "Generator"] or getattr(enemy, "is_falling", False):
+                continue
+
             push_margin = margin - 2
             e_col = int((enemy.pos.x - offsetX) // grid_size)
             e_row = int(enemy.pos.y // grid_size)
@@ -1765,7 +1769,10 @@ while running:
 
             push_final = pygame.math.Vector2(0, 0)
             for other in others:
-                if other == enemy: continue
+                # --- NUEVO: Tampoco usamos a estos para empujar a los demás ---
+                if other == enemy or type(other).__name__ in ["AttachedLeaf", "Generator"] or getattr(other, "is_falling", False):
+                    continue
+
                 distance = enemy.pos.distance_to(other.pos)
                 if distance < (enemy.radius + other.radius):
                     if distance == 0:
@@ -1838,12 +1845,17 @@ while running:
                         break
 
         for enemy in list(enemy_group):
-            if enemy.health <= 0:
+            if type(enemy).__name__ == "AttachedLeaf":
+                continue
+            if enemy.health <= 0 and not getattr(enemy, "is_dying", False):
+                enemy.is_dying = True
+                enemy.state = "death"
+                enemy.current_frame = 0
+
                 gold_buff = 1.0 + (passive_levels.get("gold", 0) * 0.05)
                 xp_buff = 1.0 + (passive_levels.get("xp", 0) * 0.05)
                 player_gold += int(enemy.gold_value * gold_buff)
                 player_xp += int(enemy.xp_value * xp_buff * difficulty_multiplier)
-                enemy.kill()
 
                 if player_xp >= xp_to_next_level:
                     player_xp -= xp_to_next_level

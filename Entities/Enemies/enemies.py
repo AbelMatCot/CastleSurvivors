@@ -1,6 +1,25 @@
 import pygame
 import random
+import os
 
+basic_sheet = None
+fast_sheet = None
+tank_sheet = None
+flyer_sheet = None
+generator_sheet = None
+swarmer_sheet = None
+
+
+def get_enemy_frames(sheet, row, num_frames, scale=1.0):
+    frames = []
+    for i in range(num_frames):
+        frame = pygame.Surface((24, 24), pygame.SRCALPHA)
+        frame.blit(sheet, (0, 0), (i * 32 + 4, row * 32 + 8, 24, 24))
+        if scale != 1.0:
+            new_size = int(24 * scale)
+            frame = pygame.transform.scale(frame, (new_size, new_size))
+        frames.append(frame)
+    return frames
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x, health, speed, color, radius, xp_value, gold_value, base_damage):
@@ -27,43 +46,45 @@ class Enemy(pygame.sprite.Sprite):
         self.grid_size = grid_size
         self.offset_x = offset_x
 
-        # Añadimos las torres (8) a los objetivos
         self.target_cells = (2, 3, 8)
 
-        # --- AUTO-DETECCIÓN DE TÚNEL ARREGLADA ---
-        # Usamos directamente las variables locales offset_x y grid_size
+        # --- AUTO-DETECCIÓN DE TÚNEL ---
         grid_x_start = (self.pos.x - offset_x) / grid_size
         grid_y_start = self.pos.y / grid_size
 
-        # Los enemigos nacen en el centro de la casilla (0.5 o 23.5)
-        # Comprobamos con margen de 1.0 para que no falle la detección
         if grid_y_start < 1.0:
-            self.tunnel_dir = pygame.math.Vector2(0, 1)  # Viene del Norte
+            self.tunnel_dir = pygame.math.Vector2(0, 1)
         elif grid_y_start > 22.0:
-            self.tunnel_dir = pygame.math.Vector2(0, -1)  # Viene del Sur
+            self.tunnel_dir = pygame.math.Vector2(0, -1)
         elif grid_x_start < 1.0:
-            self.tunnel_dir = pygame.math.Vector2(1, 0)  # Viene del Oeste
+            self.tunnel_dir = pygame.math.Vector2(1, 0)
         else:
-            self.tunnel_dir = pygame.math.Vector2(-1, 0)  # Viene del Este
+            self.tunnel_dir = pygame.math.Vector2(-1, 0)
 
         self.attack_timer = 0.0
         self.attack_cooldown = 1.0
         self.wall_damage_counter = 0
 
-        # Temporizador para el flash de daño
         self.flash_timer = 0.0
         self.is_flashing = False
 
-        # Variables públicas para que main.py pueda calcular los empujones
         self.is_attacking = False
         self.dir_norm = pygame.math.Vector2(1, 0)
 
+        # --- NUEVO: VARIABLES DE ANIMACIÓN BASE ---
+        self.state = "walk"
+        self.current_frame = 0
+        self.anim_timer = 0.0
+        self.facing_right = True
+        self.is_dying = False
+
     def take_damage(self, amount):
+        # Si está muriendo O es intargeteable, ignora el daño
+        if getattr(self, "is_dying", False) or getattr(self, "is_untargetable", False):
+            return
         self.health -= amount
         self.is_flashing = True
-        self.flash_timer = 0.1  # Duración del parpadeo
-        self.image.fill((0, 0, 0, 0))
-        pygame.draw.circle(self.image, "white", (self.radius, self.radius), self.radius)
+        self.flash_timer = 0.1
 
     def apply_slow(self, factor, duration):
         self.speed = self.base_speed * factor
@@ -76,20 +97,39 @@ class Enemy(pygame.sprite.Sprite):
             if self.slow_timer <= 0:
                 self.speed = self.base_speed
 
-        # 1. Control del parpadeo
-        if self.is_flashing:
-            self.flash_timer -= dt
-            if self.flash_timer <= 0:
-                self.is_flashing = False
-                self.image.fill((0, 0, 0, 0))
-                pygame.draw.circle(self.image, self.base_color, (self.radius, self.radius), self.radius)
+        # 1. SI ESTÁ MURIENDO (Lógica global de muerte)
+        if self.is_dying:
+            if hasattr(self, "animations") and "death" in self.animations:
+                self.anim_timer += dt
+                if self.anim_timer >= 0.1:  # Velocidad de la muerte
+                    self.anim_timer = 0.0
+                    self.current_frame += 1
 
-        # 2. DIRECCIÓN (Lógica de Túnel + Centro)
+                if self.current_frame < len(self.animations["death"]):
+                    # Refrescamos la imagen en cada frame, no solo al cambiar de animación
+                    frame_img = self.animations["death"][self.current_frame]
+                    if not self.facing_right:
+                        frame_img = pygame.transform.flip(frame_img, True, False)
+                    self.image = frame_img.copy()
+
+                    # Le metemos el mismo parche de pintura brillante
+                    if self.is_flashing:
+                        self.flash_timer -= dt
+                        if self.flash_timer > 0:
+                            self.image.fill((150, 150, 150), special_flags=pygame.BLEND_RGB_ADD)
+                        else:
+                            self.is_flashing = False
+                else:
+                    self.kill()
+            else:
+                self.kill()  # Si no tiene sprite, muere al instante
+            return
+
+        # 2. DIRECCIÓN Y MOVIMIENTO BÁSICO
         margin = 1
         grid_x_exact = (self.pos.x - self.offset_x) / self.grid_size
         grid_y_exact = self.pos.y / self.grid_size
 
-        # Forzamos la dirección del túnel hasta que estén medio bloque dentro
         if self.tunnel_dir.y == 1 and grid_y_exact < margin + 0.5:
             self.dir_norm = self.tunnel_dir
         elif self.tunnel_dir.y == -1 and grid_y_exact > 24 - margin - 0.5:
@@ -99,7 +139,6 @@ class Enemy(pygame.sprite.Sprite):
         elif self.tunnel_dir.x == -1 and grid_x_exact > 24 - margin - 0.5:
             self.dir_norm = self.tunnel_dir
         else:
-            # Una vez están a salvo, a por el castillo
             center_vec = pygame.math.Vector2(640, 360)
             direction = center_vec - self.pos
             if direction.length() != 0:
@@ -107,7 +146,7 @@ class Enemy(pygame.sprite.Sprite):
             else:
                 self.dir_norm = pygame.math.Vector2(0, 0)
 
-        # 3. DETECTAR SI ESTÁ TOCANDO OBSTÁCULO Y DAÑAR ESTRUCTURAS
+        # 3. DETECTAR OBSTÁCULOS
         check_pos = self.pos + self.dir_norm * (self.radius + 4)
         grid_x = int((check_pos.x - self.offset_x) // self.grid_size)
         grid_y = int(check_pos.y // self.grid_size)
@@ -120,8 +159,6 @@ class Enemy(pygame.sprite.Sprite):
                 self.attack_timer += dt
                 if self.attack_timer >= self.attack_cooldown:
                     self.attack_timer = 0.0
-
-                    # --- PASIVAS: Armadura ---
                     armor_lvl = passive_levels.get("armor", 0) if passive_levels else 0
                     damage_reduction = 1.0 - (armor_lvl * 0.05)
                     final_damage = max(1, int(self.base_damage * damage_reduction))
@@ -131,21 +168,63 @@ class Enemy(pygame.sprite.Sprite):
                         if coords in structures_hp:
                             structures_hp[coords] -= final_damage
                             if structures_hp[coords] <= 0:
-                                grid[grid_y][grid_x] = 0  # Se destruye el muro/torre
+                                grid[grid_y][grid_x] = 0
                                 del structures_hp[coords]
-
                     elif cell == 3:
-                        # Aquí luego habrá que restar la vida al castillo en main.py
-                        print(f"¡El castillo sufre {final_damage} de daño!")
+                        pass  # El daño al castillo ya lo gestiona el main.py
 
-                    # --- PASIVAS: Espinas ---
                     thorns_lvl = passive_levels.get("thorns", 0) if passive_levels else 0
                     if thorns_lvl > 0 and thorns_values:
                         self.take_damage(thorns_values[thorns_lvl])
 
-        # 4. AVANZAR
         if not self.is_attacking:
             self.pos += self.dir_norm * self.speed * dt
+
+        # 4. MÁQUINA DE ESTADOS VISUAL
+        if self.dir_norm.x > 0.1:
+            self.facing_right = True
+        elif self.dir_norm.x < -0.1:
+            self.facing_right = False
+
+        new_state = getattr(self, "custom_state", "attack" if self.is_attacking else "walk")
+
+        if self.state != new_state:
+            self.state = new_state
+            self.current_frame = 0
+
+        # 5. RENDERIZADO VISUAL (Sprites vs Círculos)
+        if hasattr(self, "animations") and self.state in self.animations:
+            # Tiene Sprites
+            self.anim_timer += dt
+            if self.anim_timer >= 0.1:
+                self.anim_timer = 0.0
+                self.current_frame = (self.current_frame + 1) % len(self.animations[self.state])
+
+            frame_img = self.animations[self.state][self.current_frame]
+            if not self.facing_right:
+                frame_img = pygame.transform.flip(frame_img, True, False)
+            self.image = frame_img.copy()
+
+            # ¡AQUÍ ESTÁ EL FIX! Actualizamos el rect a la nueva imagen
+            self.rect = self.image.get_rect()
+
+            if self.is_flashing:
+                self.flash_timer -= dt
+                if self.flash_timer > 0:
+                    self.image.fill((150, 150, 150), special_flags=pygame.BLEND_RGB_ADD)
+                else:
+                    self.is_flashing = False
+        else:
+            # Fallback de Círculos para enemigos sin sprite todavía
+            if self.is_flashing:
+                self.flash_timer -= dt
+                if self.flash_timer > 0:
+                    self.image.fill((0, 0, 0, 0))
+                    pygame.draw.circle(self.image, "white", (self.radius, self.radius), self.radius)
+                else:
+                    self.is_flashing = False
+                    self.image.fill((0, 0, 0, 0))
+                    pygame.draw.circle(self.image, self.base_color, (self.radius, self.radius), self.radius)
 
         self.rect.center = (round(self.pos.x), round(self.pos.y))
 
@@ -154,63 +233,294 @@ class Enemy(pygame.sprite.Sprite):
 
 class Basic(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # 15 HP: 3 flechas/kunais, 2 bolas de fuego o 3s de láser
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=15, speed=30.0, color="red", radius=8, xp_value=3, gold_value=2, base_damage=10)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=15, speed=30.0, color="red", radius=8,
+                         xp_value=3, gold_value=2, base_damage=10)
+
+        global basic_sheet
+        if basic_sheet is None:
+            basic_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "basic.png")).convert_alpha()
+
+        self.animations = {
+            "walk": get_enemy_frames(basic_sheet, 1, 8),
+            "attack": get_enemy_frames(basic_sheet, 2, 6),
+            "death": get_enemy_frames(basic_sheet, 5, 5)
+        }
+
+        self.image = self.animations[self.state][self.current_frame]
+
 
 class Fast(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # 6 HP: Cae de 2 flechas o 1 bola de fuego, pero va como una bala
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=6, speed=60.0, color="green", radius=6, xp_value=2, gold_value=1, base_damage=15)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=6, speed=60.0, color="green", radius=6,
+                         xp_value=2, gold_value=1, base_damage=15)
+
+        global fast_sheet
+        if fast_sheet is None:
+            fast_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "fast.png")).convert_alpha()
+
+        self.animations = {
+            "walk": get_enemy_frames(fast_sheet, 1, 8),  # Fila 2
+            "attack": get_enemy_frames(fast_sheet, 2, 4),  # Fila 3
+            "death": get_enemy_frames(fast_sheet, 5, 8)  # Fila 6
+        }
+
+        self.image = self.animations[self.state][self.current_frame]
+
 
 class Tank(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # 45 HP: El triple de vida, aguanta 9 flechas
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=45, speed=15.0, color="blue", radius=14, xp_value=15, gold_value=8, base_damage=30)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=45, speed=15.0, color="blue", radius=14,
+                         xp_value=15, gold_value=8, base_damage=30)
 
+        global tank_sheet
+        if tank_sheet is None:
+            tank_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "tank.png")).convert_alpha()
+
+        self.animations = {
+            "walk": get_enemy_frames(tank_sheet, 1, 8),  # Fila 2
+            "attack": get_enemy_frames(tank_sheet, 2, 6),  # Fila 3
+            "death": get_enemy_frames(tank_sheet, 4, 6)  # Fila 5
+        }
+
+        self.image = self.animations[self.state][self.current_frame]
+
+class Flyer(Enemy):
+    def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=10, speed=40.0, color="yellow", radius=8,
+                         xp_value=3, gold_value=2, base_damage=15)
+        self.target_cells = (3,)
+
+        global flyer_sheet
+        if flyer_sheet is None:
+            flyer_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "flyer.png")).convert_alpha()
+
+        self.animations = {
+            "walk": get_enemy_frames(flyer_sheet, 0, 4),  # Fila 1
+            "attack": get_enemy_frames(flyer_sheet, 2, 4),  # Fila 3
+            "death": get_enemy_frames(flyer_sheet, 3, 6)  # Fila 4
+        }
+
+        self.image = self.animations[self.state][self.current_frame]
+
+
+class AttachedLeaf(pygame.sprite.Sprite):
+    def __init__(self, trent):
+        super().__init__()
+        self.trent = trent
+        self.scale = 0.0
+        self.health = 0
+        self.is_dying = False
+
+        global swarmer_sheet
+        if swarmer_sheet is None:
+            swarmer_sheet = pygame.image.load(
+                os.path.join("Assets", "Sprites", "Enemies", "swarmer.png")).convert_alpha()
+
+        self.base_img = get_enemy_frames(swarmer_sheet, 0, 1)[0]
+        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+
+    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+        if not self.trent.alive() or getattr(self.trent, "is_dying", False):
+            self.kill()
+            return
+
+        self.scale = min(1.0, self.scale + dt * 1.4)
+        size = max(1, int(24 * self.scale))
+
+        # Escalamos y volteamos la carita de la hoja si el Trent gira
+        img = pygame.transform.scale(self.base_img, (size, size))
+        if not self.trent.facing_right:
+            img = pygame.transform.flip(img, True, False)
+
+        self.image = img
+
+        # --- EL FIX: ACTUALIZAR EL TAMAÑO ANCLANDO LA BASE ---
+        self.rect = self.image.get_rect(midbottom=self.rect.midbottom)
+
+        self.y_sort = self.trent.rect.bottom + 1
+
+class Swarmer(Enemy):
+    def __init__(self, pixel_x, pixel_y, grid_size, offset_x, fall_start_pos=None):
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=3, speed=75.0, color="pink", radius=4,
+                         xp_value=0, gold_value=0, base_damage=3)
+
+        global swarmer_sheet
+        if swarmer_sheet is None:
+            swarmer_sheet = pygame.image.load(
+                os.path.join("Assets", "Sprites", "Enemies", "swarmer.png")).convert_alpha()
+
+        self.animations = {
+            "idle": get_enemy_frames(swarmer_sheet, 0, 4),  # Fila 1
+            "walk": get_enemy_frames(swarmer_sheet, 1, 4),  # Fila 2
+            "attack": get_enemy_frames(swarmer_sheet, 5, 4),  # Fila 6
+            "death": get_enemy_frames(swarmer_sheet, 4, 6)  # Fila 5
+        }
+
+        # Lógica de "Paracaidista"
+        if fall_start_pos:
+            self.pos = pygame.math.Vector2(fall_start_pos)
+            self.ground_y = pixel_y
+            self.is_falling = True
+            self.health = 3  # <--- ¡Le devolvemos su vida real!
+            self.is_untargetable = True  # <--- NUEVA FLAG: Inmune y camuflado
+            self.custom_state = "idle"
+        else:
+            self.is_falling = False
+            self.is_untargetable = False
+            self.custom_state = "walk"
+
+        self.image = self.animations[getattr(self, "custom_state", "walk")][self.current_frame]
+
+        # En enemies.py -> clase Swarmer -> def update(...)
+
+    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+        if getattr(self, "is_falling", False):
+            self.pos.y += 50.0 * dt
+
+            self.anim_timer += dt
+            if self.anim_timer >= 0.1:
+                self.anim_timer = 0.0
+                self.current_frame = (self.current_frame + 1) % len(self.animations["idle"])
+
+            frame_img = self.animations["idle"][self.current_frame]
+            if not self.facing_right:
+                frame_img = pygame.transform.flip(frame_img, True, False)
+            self.image = frame_img.copy()
+
+            # --- EL FIX ---
+            # Reajustamos el rect antes de centrarlo, igual que en la clase padre
+            self.rect = self.image.get_rect()
+            self.rect.center = (round(self.pos.x), round(self.pos.y))
+
+            if self.pos.y >= self.ground_y:
+                self.is_falling = False
+                self.is_untargetable = False
+                self.custom_state = "walk"
+                if hasattr(self, "y_sort"): del self.y_sort
+            return
+
+        super().update(dt, grid, enemy_group, structures_hp, passive_levels, thorns_values)
 
 class Generator(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # 60 HP: Esponja de daño lenta que hay que priorizar
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=60, speed=10.0, color="purple", radius=16,
+        # Volvemos a escala 2.0 y radio 16
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=60, speed=25.0, color="purple", radius=16,
                          xp_value=25, gold_value=15, base_damage=5)
+
+        self.my_leaves = []
         self.spawn_timer = 0.0
-        self.my_swarmers = []  # Lista para controlar a sus crías
+        self.jump_cooldown = 1.2  # Descansa solo 1.2 segundos entre saltos
+        self.is_waiting = True
+
+        global generator_sheet
+        if generator_sheet is None:
+            generator_sheet = pygame.image.load(
+                os.path.join("Assets", "Sprites", "Enemies", "generator.png")).convert_alpha()
+
+        self.animations = {
+            "walk": get_enemy_frames(generator_sheet, 1, 8, scale=2.0),
+            "attack": get_enemy_frames(generator_sheet, 2, 6, scale=2.0),
+            "idle_spawn": get_enemy_frames(generator_sheet, 3, 4, scale=2.0),
+            "death": get_enemy_frames(generator_sheet, 4, 8, scale=2.0)
+        }
+
+        self.image = self.animations[self.state][self.current_frame]
 
     def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
-        super().update(dt, grid, enemy_group, structures_hp, passive_levels, thorns_values)
+        min_dist = float('inf')
+        if structures_hp:
+            for (r, c) in structures_hp.keys():
+                struct_pos = pygame.math.Vector2(self.offset_x + c * self.grid_size + self.grid_size / 2,
+                                                 r * self.grid_size + self.grid_size / 2)
+                d = self.pos.distance_to(struct_pos)
+                if d < min_dist: min_dist = d
 
-        if enemy_group is not None:
-            # Limpiamos la lista quitando los swarmers que ya han muerto
-            self.my_swarmers = [s for s in self.my_swarmers if s.alive()]
+        in_dash = (self.state in ["walk", "idle_spawn"]) and (self.current_frame in [1, 2, 3, 5, 6, 7])
 
+        if min_dist <= 80 and not in_dash:
+            self.custom_state = "attack" if self.is_attacking else "idle_spawn"
+        else:
+            self.custom_state = "walk"
+
+        # --- LÓGICA DE TIEMPOS Y DASH AVANZADA ---
+        if self.state in ["walk", "idle_spawn"] and self.current_frame in [0, 4]:
+            self.is_waiting = True
+        else:
+            self.is_waiting = False
+
+        if self.is_waiting:
+            self.speed = 0.0
             self.spawn_timer += dt
+            if self.spawn_timer >= self.jump_cooldown:
+                self.spawn_timer = 0.0
+                # ¡Rompe el hielo! Obligamos al reloj de animación a dar el salto al siguiente frame
+                self.anim_timer = 0.1
+            else:
+                # Congelación perfecta: le restamos el tiempo que la clase padre le va a sumar
+                self.anim_timer = -dt
+        else:
+            self.speed = 35.0  # Dash potente para recorrer buena distancia
+            # Ralentizamos la animación en el aire para que el salto parezca "flotante" y dure más
+            self.anim_timer -= dt * 0.65
 
-            if self.spawn_timer >= 4.0:
-                # Solo escupe si tiene menos de 5 huérfanos vivos
-                if len(self.my_swarmers) < 5:
-                    self.spawn_timer = 0.0  # Reseteamos el timer solo si consigue parir
+        old_frame = self.current_frame
+        super().update(dt, grid, enemy_group, structures_hp, passive_levels, thorns_values)
+        new_frame = self.current_frame
 
-                    for _ in range(3):
-                        offset_x = self.pos.x + random.uniform(-10, 10)
-                        offset_y = self.pos.y + random.uniform(-10, 10)
+        # --- SINCRONIZACIÓN DE HOJAS ---
+        if self.state in ["walk", "idle_spawn"] and not getattr(self, "is_dying", False):
+            is_jump_start = (new_frame in [1, 5] and old_frame not in [1, 5])
+            is_landing = (new_frame in [0, 4] and old_frame not in [0, 4])
 
-                        swarmer = Swarmer(offset_x, offset_y, self.grid_size, self.offset_x)
+            if is_jump_start and len(self.my_leaves) == 0:
+                # Ahora solo instanciamos, el posicionamiento va debajo
+                for _ in range(3):
+                    leaf = AttachedLeaf(self)
+                    if enemy_group is not None:
+                        enemy_group.add(leaf)
+                    self.my_leaves.append(leaf)
+
+            # ¡AQUÍ ESTÁ LA MAGIA! Clavamos las hojas a su cabeza en tiempo real
+            if len(self.my_leaves) > 0:
+                offsets = [(-8, 2), (0, -2), (8, 0)]
+                for i, leaf in enumerate(self.my_leaves):
+                    ox, oy = offsets[i]
+                    if not self.facing_right:
+                        ox = -ox
+
+                    # --- COMPENSADOR SOLO VERTICAL ---
+                    shift_y = 0
+                    # Si está en los frames donde salta y se estira:
+                    if self.current_frame in [1, 2, 3, 5, 6, 7]:
+                        shift_y = -6  # Sube un poco, pero no se mueve hacia los lados
+
+                    final_x = self.pos.x + ox
+                    final_y = self.pos.y + oy + shift_y
+
+                    # Crecen desde la base sin despegarse
+                    leaf.rect.midbottom = (round(final_x), round(final_y))
+
+            if is_landing and len(self.my_leaves) > 0:
+                for leaf in self.my_leaves:
+                    leaf.kill()
+                    sx = leaf.rect.centerx
+                    sy = leaf.rect.centery
+                    gx = self.pos.x + random.uniform(-10, 10)
+                    gy = self.pos.y + random.uniform(5, 15)
+                    swarmer = Swarmer(gx, gy, self.grid_size, self.offset_x, fall_start_pos=(sx, sy))
+
+                    swarmer.facing_right = self.facing_right
+                    # --- NUEVO: CÓDIGO LIMPIO. HEREDAN LA PROFUNDIDAD DEL TRENT ---
+                    swarmer.y_sort = self.rect.bottom + 1
+
+                    if enemy_group is not None:
                         enemy_group.add(swarmer)
-                        self.my_swarmers.append(swarmer)  # Lo metemos en la guardería
-
-class Swarmer(Enemy):
-    def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # 2 HP: Muere de una sola caricia de cualquier torre
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=3, speed=75.0, color="pink", radius=4, xp_value=0, gold_value=0, base_damage=3)
+                self.my_leaves.clear()
 
 class Shooter(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
         super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=12, speed=30.0, color="cyan", radius=8, xp_value=4, gold_value=3, base_damage=10)
-
-class Flyer(Enemy):
-    def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=10, speed=40.0, color="yellow", radius=8, xp_value=3, gold_value=2, base_damage=15)
-        self.target_cells = (3,)
 
 class Boss(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
