@@ -10,7 +10,7 @@ from Entities.spawn import Spawn
 from Entities.effects import Effect
 
 # =====================================================================
-# CAPÍTULO 1: CONSTANTES Y CONFIGURACIÓN BÁSICA
+# PARTE 1: CONSTANTES Y CONFIGURACIÓN BÁSICA
 # =====================================================================
 allow = 0
 forbid = 1
@@ -78,7 +78,7 @@ controls = {
 }
 
 # =====================================================================
-# CAPÍTULO 2: INICIALIZACIÓN DEL MOTOR
+# PARTE 2: INICIALIZACIÓN DEL MOTOR
 # =====================================================================
 pygame.init()
 pygame.font.init()
@@ -90,7 +90,7 @@ running = True
 
 
 # =====================================================================
-# CAPÍTULO 3: FUNCIONES DE UTILIDAD (ASSETS Y UI)
+# PARTE 3: FUNCIONES DE UTILIDAD (ASSETS Y UI)
 # =====================================================================
 def extract_sprite(sheet, column, rw, cols_total, rows_total, crop=True, crop_x_only=False):
     w = sheet.get_width() // cols_total
@@ -417,7 +417,7 @@ def draw_action_btn(x, y, w, h, key_text, label, cost=None, is_pressed=False):
 
 
 # =====================================================================
-# CAPÍTULO 4: CARGA DE RECURSOS (ASSETS Y FUENTES)
+# PARTE 4: CARGA DE RECURSOS (ASSETS Y FUENTES)
 # =====================================================================
 
 class TowerSmoke(pygame.sprite.Sprite):
@@ -596,11 +596,34 @@ KEYMAP_COORDS = {
     "'": (0, 6), "[": (1, 6), "]": (2, 6), "+": (3, 6), "-": (4, 6), ";": (6, 6)
 }
 
+# --- CURSOR Y PANELES ---
+pygame.mouse.set_visible(False)
+
+try:
+    cursor_img = pygame.image.load(os.path.join("Assets", "UI", "Cursor.png")).convert_alpha()
+    # Escálalo si lo ves muy pequeño o grande, por ejemplo a 32x32:
+    cursor_img = pygame.transform.scale(cursor_img, (32, 32))
+except FileNotFoundError:
+    cursor_img = None
+
+try:
+    panel_img = pygame.image.load(os.path.join("Assets", "UI", "Panels.png")).convert()
+    orig_w, orig_h = panel_img.get_size()
+    new_w = 280
+    new_h = int(orig_h * (new_w / orig_w))
+    scaled_panel = pygame.transform.scale(panel_img, (new_w, new_h))
+    panel_bg = pygame.Surface((280, 720))
+
+    for y in range(0, 720, new_h):
+        panel_bg.blit(scaled_panel, (0, y))
+except FileNotFoundError:
+    panel_bg = None
+
 # =====================================================================
-# CAPÍTULO 5: VARIABLES DE ESTADO Y DICCIONARIOS
+# PARTE 5: VARIABLES DE ESTADO Y DICCIONARIOS
 # =====================================================================
 current_tool = None
-game_state = "PLAYING"
+game_state = "MAIN_MENU"
 unlocked_towers = ["arrow"]
 active_towers = ["arrow", None, None, None]
 level_up_options = []
@@ -732,8 +755,15 @@ spawn_schedule.sort(key=lambda x: x[0])
 
 last_built_cell = None
 
+try:
+    bg_menu = pygame.image.load(os.path.join("Assets","UI", "landscape.png")).convert()
+    bg_menu = pygame.transform.scale(bg_menu, (1280, 720))
+except FileNotFoundError:
+    bg_menu = pygame.Surface((1280, 720))
+    bg_menu.fill("#222222")
+
 # =====================================================================
-# CAPÍTULO 6: FUNCIONES DE LÓGICA DE JUEGO
+# PARTE 6: FUNCIONES DE LÓGICA DE JUEGO
 # =====================================================================
 def get_valid_border(spawn_type):
     if spawn_type == "wildcard":
@@ -889,7 +919,7 @@ def update_neighbors_walls(r, c):
                 update_ruin_masks(nr, nc)
 
 # =====================================================================
-# CAPÍTULO 7: PREPARACIÓN DEL MAPA Y GRUPOS
+# PARTE 7: PREPARACIÓN DEL MAPA Y GRUPOS
 # =====================================================================
 background_tile = get_tile(color4_sheet, 64, 64, 64, 64, grid_size)
 buildable_tiles = {
@@ -955,7 +985,7 @@ current_minute = 0
 difficulty_multiplier = 1.0
 
 # =====================================================================
-# CAPÍTULO 8: BUCLE PRINCIPAL
+# PARTE 8: BUCLE PRINCIPAL
 # =====================================================================
 while running:
     keys = pygame.key.get_pressed()
@@ -1233,6 +1263,16 @@ while running:
                                 last_built_cell = (hoverRow, hoverCol)
 
         if event.type == pygame.MOUSEBUTTONUP:
+            if game_state == "MAIN_MENU":
+                if "main_menu_rects" in locals() or "main_menu_rects" in globals():
+                    for rect, opt in main_menu_rects:
+                        if rect.collidepoint(mouseX, mouseY):
+                            if opt == "Play":
+                                game_state = "PLAYING"
+                            elif opt == "Exit":
+                                running = False
+                            else:
+                                print(f"You clicked {opt}. It is still a work in progress, patience.")
             if game_state == "PAUSED":
                 if "pause_rects" in globals() or "pause_rects" in locals():
                     for rect, opt in pause_rects:
@@ -1439,8 +1479,6 @@ while running:
 
         bar_w = 40
         bx = offsetX + (c * grid_size) + (grid_size // 2) - (bar_w // 2)
-
-        # Movemos la barra a la parte inferior de la casilla (grid_size es 30, barra mide 6)
         by = (r * grid_size) + grid_size - 15
 
         # Efecto de desvanecimiento suave si la barra va a desaparecer
@@ -1501,8 +1539,12 @@ while running:
                                    (mouseX + 15 + dx, mouseY + 15 + dy))
                 gameboard.blit(ui_font_medium.render(action_text, True, color_text), (mouseX + 15, mouseY + 15))
 
-    pygame.draw.rect(gameboard, "#222222", (0, 0, offsetX, 720))
-    pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (offsetX + width_gameboard), 720))
+    if panel_bg:
+        gameboard.blit(panel_bg, (0, 0))
+        gameboard.blit(panel_bg, (offsetX + width_gameboard, 0))
+    else:
+        pygame.draw.rect(gameboard, "#222222", (0, 0, offsetX, 720))
+        pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (offsetX + width_gameboard), 720))
 
     clock_rect = pygame.Rect(75, 35, 120, 75)
     draw_paper(gameboard, special_paper_sheet, clock_rect)
@@ -1562,7 +1604,7 @@ while running:
 
         current_wall_cost = min(50, 10 + int(player_level * 0.8))
         wall_key = pygame.key.name(controls["wall"])
-        is_wall_pressed = (current_tool == "wall") or keys[controls["wall"]]
+        is_wall_pressed = (current_tool == "wall")
         draw_slot(rx + 25, 200, 50, wall_key, current_wall_cost, is_pressed=is_wall_pressed, t_id="wall")
 
         draw_ribbon(gameboard, rx + 100, 210, 140, 40, ribbon_sheet, rw=0)
@@ -1660,6 +1702,45 @@ while running:
             opt_surf = ui_font_medium.render(opt, True, "black")
             gameboard.blit(opt_surf,
                            (640 - opt_surf.get_width() // 2, btn_y + 30 - opt_surf.get_height() // 2 - 4 + y_off))
+
+    elif game_state == "MAIN_MENU":
+        # 1. Fondo de paisaje
+        gameboard.blit(bg_menu, (0, 0))
+
+        # 2. Lazo rojo gigante
+        draw_ribbon(gameboard, 640 - 250, 100, 500, 100, big_ribbon_sheet, rw=1, rows_total=5)
+
+        # 3. Título en amarillo
+        title_text = ui_font_large.render("CASTLE SURVIVORS", True, (255, 235, 0))
+        gameboard.blit(title_text, (640 - title_text.get_width() // 2, 130))
+
+        # 4. Botones
+        menu_opts = ["Play", "Upgrades", "Settings", "Exit"]
+        main_menu_rects = []
+        for i, opt in enumerate(menu_opts):
+            btn_y = 280 + i * 80
+            btn_rect = pygame.Rect(640 - 100, btn_y, 200, 60)
+            main_menu_rects.append((btn_rect, opt))
+
+            is_hover = btn_rect.collidepoint(mouseX, mouseY) and pygame.mouse.get_pressed()[0]
+            current_y = btn_rect.y + 4 if is_hover else btn_rect.y
+            current_h = btn_rect.height - 4 if is_hover else btn_rect.height
+            img = btn_wide_pressed_img if is_hover else btn_wide_img
+
+            draw_9_slice_button(gameboard, img, pygame.Rect(btn_rect.x, current_y, btn_rect.width, current_h),
+                                edge_px=14)
+            y_off = 4 if is_hover else 0
+            opt_surf = ui_font_medium.render(opt, True, "black")
+            gameboard.blit(opt_surf,
+                           (640 - opt_surf.get_width() // 2, btn_y + 30 - opt_surf.get_height() // 2 - 4 + y_off))
+
+    # Dibujar cursor
+    if cursor_img:
+        gameboard.blit(cursor_img, (mouseX, mouseY))
+
+    screensize = screen.get_size()
+    rescaled_gameboard = pygame.transform.scale(gameboard, screensize)
+    screen.blit(rescaled_gameboard, (0, 0))
 
     screensize = screen.get_size()
     rescaled_gameboard = pygame.transform.scale(gameboard, screensize)

@@ -8,7 +8,8 @@ tank_sheet = None
 flyer_sheet = None
 generator_sheet = None
 swarmer_sheet = None
-
+shooter_sheet = None
+shooter_fx_sheet = None
 
 def get_enemy_frames(sheet, row, num_frames, scale=1.0):
     frames = []
@@ -518,10 +519,94 @@ class Generator(Enemy):
                         enemy_group.add(swarmer)
                 self.my_leaves.clear()
 
+
+class ShooterEffect(pygame.sprite.Sprite):
+    def __init__(self, x, y, flip):
+        super().__init__()
+        global shooter_fx_sheet
+        # Asegúrate de que shooter_fx_sheet esté cargado
+        self.frames = get_enemy_frames(shooter_fx_sheet, 0, 6)  # Fila 0, 6 frames
+        if flip:
+            self.frames = [pygame.transform.flip(f, True, False) for f in self.frames]
+
+        self.current_frame = 0
+        self.anim_timer = 0.0
+        self.image = self.frames[0]
+        self.rect = self.image.get_rect(center=(x, y))
+
+    def update(self, dt):
+        self.anim_timer += dt
+        if self.anim_timer >= 0.08:  # Un poco más rápido que el enemigo
+            self.anim_timer = 0.0
+            self.current_frame += 1
+            if self.current_frame < len(self.frames):
+                self.image = self.frames[self.current_frame]
+            else:
+                self.kill()
+
+
 class Shooter(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=12, speed=30.0, color="cyan", radius=8, xp_value=4, gold_value=3, base_damage=10)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=12, speed=30.0,
+                         color="cyan", radius=8, xp_value=4, gold_value=3, base_damage=10)
 
+        self.range = 75
+        self.attack_cooldown = 1.2
+
+        global shooter_sheet
+        if shooter_sheet is None:
+            shooter_sheet = pygame.image.load(
+                os.path.join("Assets", "Sprites", "Enemies", "shooter.png")).convert_alpha()
+
+        self.animations = {
+            "walk": get_enemy_frames(shooter_sheet, 1, 8),
+            "attack": get_enemy_frames(shooter_sheet, 2, 6),
+            "death": get_enemy_frames(shooter_sheet, 4, 6)
+        }
+        self.image = self.animations["walk"][0]
+
+    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+        # Lógica de detección de rango 75px
+        target = None
+        # Simplificamos: buscamos cualquier cosa que sea targeteable (estructuras o castillo)
+        # Puedes iterar sobre structures_hp.keys() para encontrar el más cercano
+
+        if structures_hp:
+            for (r, c) in structures_hp.keys():
+                s_pos = pygame.math.Vector2(self.offset_x + c * self.grid_size + 15, r * self.grid_size + 15)
+                if self.pos.distance_to(s_pos) <= self.range:
+                    target = s_pos
+                    break
+
+        if target:
+            self.is_attacking = True
+            self.dir_norm = (target - self.pos).normalize() if (target - self.pos).length() > 0 else self.dir_norm
+            self.attack_timer += dt
+
+            if self.attack_timer >= self.attack_cooldown:
+                self.attack_timer = 0.0
+                # Spawnear el efecto visual de ataque (fila 6 / index 5)
+                # Lo spawnemos justo delante del mago
+                fx_offset = 20 if self.facing_right else -20
+                fx = ShooterEffect(self.pos.x + fx_offset, self.pos.y, not self.facing_right)
+                if enemy_group: enemy_group.add(fx)
+
+                # Hitscan damage
+                # Aquí aplicarías el daño al objeto targeteado (tendrías que pasarle el objeto, no solo la posición)
+                # Por simplicidad ahora, el enemigo hace daño al terminar el cooldown
+                pass
+        else:
+            self.is_attacking = False
+
+        super().update(dt, grid, enemy_group, structures_hp, passive_levels, thorns_values)
+# todo shooter
+"""
+Hitscan Real: En el update, cuando self.attack_timer >= self.attack_cooldown, no hagas solo pass. Busca el objeto en structures_hp que está en target y resta self.base_damage.
+
+Shooter_fx.png: Asegúrate de que shooter_fx_sheet se carga igual que los otros pygame.image.load en la inicialización de los globales.
+
+Fila 6: He asumido que la fila 6 (índice 5 en el array) es el efecto visual de disparo. Si resulta que el efecto de la fila 6 es la propia animación del mago disparando (y no un sprite aparte), entonces solo tendrías que añadir esa animación al diccionario self.animations en lugar de crear la clase ShooterEffect. ¡Eso lo vemos mañana!
+"""
 class Boss(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
         # 100 HP: Un verdadero dolor de muelas para el late-game
