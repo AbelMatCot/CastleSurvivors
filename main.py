@@ -88,6 +88,7 @@ chest_group = pygame.sprite.Group()
 
 game_state = "MAIN_MENU"
 meta_health = 0
+player_gems = 0
 
 # Variables del Boss globales para que no peten al reiniciar
 next_boss_time = 150.0
@@ -102,7 +103,7 @@ def reset_game():
     global tower_levels, active_passives, passive_levels
     global spawn_counts, existing_spawns_pos, spawn_schedule, last_built_cell
     global game_time, current_minute, difficulty_multiplier, time_scale, grid
-    global next_boss_time, bosses_spawned
+    global next_boss_time, bosses_spawned, forced_initial_spawns
 
     player_group.empty()
     enemy_group.empty()
@@ -886,13 +887,6 @@ while running:
             draw_action_btn(gameboard, assets, 640 - 120, 360, 100, 50, None, "Yes", is_pressed=yes_pressed)
             draw_action_btn(gameboard, assets, 640 + 20, 360, 100, 50, None, "No", is_pressed=no_pressed)
             
-    elif game_state == "MAIN_MENU":
-        main_menu_rects = draw_main_menu(gameboard, assets, mouseX, mouseY)
-
-    elif game_state == "LEVEL_UP":
-        card_rects = draw_level_up_menu(gameboard, assets, level_up_options, selected_card_idx, offsetX, width_gameboard)
-    elif game_state == "PAUSED":
-        pause_rects = draw_pause_menu(gameboard, assets, mouseX, mouseY)
     elif game_state == "MAIN_MENU":
         main_menu_rects = draw_main_menu(gameboard, assets, mouseX, mouseY)
 

@@ -13,6 +13,11 @@ body {
     background-attachment: fixed;
     background-repeat: no-repeat;
 	font-size: 20px;
+	display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 100vh;
+    margin: 0;
 }
 header {
 	background-color: rgba(255,255,255,0.5);
@@ -66,11 +71,16 @@ p span {
 }
 
 footer {
+
     background-color: rgba(0,0,0,0.8);
     color: #fff;
     text-align: center;
     padding: 1px;
     font-size: 16px;
+}
+div.torres {
+    display: flex;
+    align-items: flex-start;
 }
 
 table {
@@ -80,9 +90,15 @@ table {
     border: solid 4px #951;
 }
 th {
-    border: solid 3px #951;
+    border: solid 2px #951;
     background-color: rgba(255,255,255,0.5);
+    width: 11.1%;
 }
 td {
     border: solid 2px #951;
+}
+div.torres img {
+    width: 120px;
+    margin: 10px 0 30px 40px;
+    image-rendering: pixelated;
 }

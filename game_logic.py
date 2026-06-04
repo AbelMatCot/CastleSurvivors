@@ -4,40 +4,6 @@ from Entities.spawn import Spawn
 from Entities.effects import Effect
 from gamedata import UI_TOWER_NAMES, TOWER_DESCRIPTIONS, PASSIVE_DESCRIPTIONS
 
-def get_level_up_cards(player_level, active_towers, tower_levels, active_passives, passive_levels):
-    if player_level > 50:
-        return [
-            {"title": "Heal Castle 20%", "desc": "Restores a large amount of lost health.", "type": "heal_20"},
-            {"title": "Gold Bag (+100)", "desc": "A big boost for your economy.", "type": "gold_100"},
-            {"title": "Gems (+5)", "desc": "Useful for meta-progression.", "type": "gems_5"}
-        ]
-    pool = []
-    has_free_slot = None in active_towers
-
-    for t_id in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
-        lvl = tower_levels[t_id]
-        name = UI_TOWER_NAMES[t_id]
-        if lvl == 0:
-            if has_free_slot:
-                pool.append({"title": f"Unlock {name}", "desc": TOWER_DESCRIPTIONS[t_id][1], "type": "upgrade_tower", "id": t_id})
-        elif lvl < 8:
-            pool.append({"title": f"Upgrade {name} (Lvl{lvl + 1})", "desc": TOWER_DESCRIPTIONS[t_id][lvl + 1], "type": "upgrade_tower", "id": t_id})
-
-    for p_id, lvl in passive_levels.items():
-        if lvl == 0:
-            if len(active_passives) < 6:
-                pool.append({"title": f"Passive: {p_id.capitalize()}", "desc": PASSIVE_DESCRIPTIONS[p_id], "type": "unlock_passive", "id": p_id})
-        elif lvl < 4:
-            pool.append({"title": f"Upgrade: {p_id.capitalize()} (Lvl{lvl + 1})", "desc": PASSIVE_DESCRIPTIONS[p_id], "type": "upgrade_passive", "id": p_id})
-
-    random.shuffle(pool)
-    cards = pool[:3]
-
-    fallbacks = [{"title": "Gold Bag (+50)", "type": "gold"}, {"title": "Heal Castle 50%", "type": "heal"}]
-    while len(cards) < 3:
-        cards.append(random.choice(fallbacks))
-    return cards
-
 def get_valid_border(spawn_type, forced_initial_spawns, spawn_counts):
     if spawn_type == "wildcard":
         return random.choice(["North", "South", "East", "West"])

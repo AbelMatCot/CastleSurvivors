@@ -264,22 +264,21 @@ def draw_action_btn(surface, assets, x, y, w, h, key_text, label, cost=None, is_
     draw_9_slice_button(surface, img, pygame.Rect(x, btn_y, w, btn_h), edge_px=14)
 
     y_off = 4 if is_pressed else 0
-    pygame.draw.rect(surface, "#3b2f2f", (x - 10, y - 10 + y_off, 26, 26), border_radius=4)
-    pygame.draw.rect(surface, "#d2b48c", (x - 10, y - 10 + y_off, 26, 26), 2, border_radius=4)
 
     if key_text:
-        pass
+        pygame.draw.rect(surface, "#3b2f2f", (x - 10, y - 10 + y_off, 26, 26), border_radius=4)
+        pygame.draw.rect(surface, "#d2b48c", (x - 10, y - 10 + y_off, 26, 26), 2, border_radius=4)
 
-    if assets.keys_sheet:
-        k = key_text.lower()
-        col_idx, row_idx = KEYMAP_COORDS.get(k, (7, 6))
-        key_img = extract_sprite(assets.keys_sheet, col_idx, row_idx, 8, 8)
-        if key_img:
-            key_img = pygame.transform.scale(key_img, (22, 22))
-            surface.blit(key_img, (x - 8, y - 8 + y_off))
-    else:
-        key_surf = assets.ui_font_medium.render(key_text.upper(), True, "white")
-        surface.blit(key_surf, (x - 3, y - 8 + y_off))
+        if assets.keys_sheet:
+            k = key_text.lower()
+            col_idx, row_idx = KEYMAP_COORDS.get(k, (7, 6))
+            key_img = extract_sprite(assets.keys_sheet, col_idx, row_idx, 8, 8)
+            if key_img:
+                key_img = pygame.transform.scale(key_img, (22, 22))
+                surface.blit(key_img, (x - 8, y - 8 + y_off))
+        else:
+            key_surf = assets.ui_font_medium.render(key_text.upper(), True, "white")
+            surface.blit(key_surf, (x - 3, y - 8 + y_off))
 
     label_surf = assets.ui_font_medium.render(label, True, "black")
     surface.blit(label_surf, (x + (w // 2) - (label_surf.get_width() // 2),

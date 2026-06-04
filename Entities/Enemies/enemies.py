@@ -732,13 +732,11 @@ class Boss(Enemy):
             self.custom_state = "walk"
             self.attack_timer = max(0.0, self.attack_timer - dt)
 
-        # Update de físicas
         super().update(dt, grid, enemy_group, effects_group, structures_hp, passive_levels, thorns_values)
 
         if target_pos:
-            self.pos = old_pos  # Se clava en el suelo al atacar
+            self.pos = old_pos
 
-            # ¡EL IMPACTO DEL HACHA! (Frame 5)
             if self.state in ["attack1", "attack2"] and self.current_frame == 5:
                 if not self.has_hit_this_cycle:
                     self.has_hit_this_cycle = True
@@ -754,7 +752,7 @@ class Boss(Enemy):
                         self.shot_castle = final_damage
                         hit_castle = True
                         center_r = int(360 // self.grid_size)
-                        center_c = int(640 // self.grid_size)
+                        center_c = int((640 - self.offset_x) // self.grid_size)
                     elif target_coords:
                         center_r, center_c = target_coords
 

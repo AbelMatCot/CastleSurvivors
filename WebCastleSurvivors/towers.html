@@ -4,6 +4,7 @@
 		<meta charset="utf-8">
 		<title>Castle Survivors</title>
 		<link rel="stylesheet" href="style.css">
+		<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
 	</head>
 	<body>
 		<header>
@@ -24,10 +25,13 @@
 				<option value="archers">Archers</option>
 				<option value="fireball">Fireball</option>
 				<option value="kunai_volley">Kunai Volley</option>
+				<option value="ice_beam">Ice Beam</option>
+				<option value="chain_lightning">Chain Lightning</option>
+				<option value="thorns_ground">Thorns Ground</option>
 			</select>
 
 			<br><br>
-			<div>
+			<div class="torres">
 				<table>
 					<thead>
 						<tr>
@@ -80,7 +84,7 @@
 					[6, 92, 3, 100, 15, 0.8, "18.75 | 93.75", 125, 5],
 					[7, 119, 4, 100, 15, 0.8, "18.75 | 93.75", 150, 5],
 					[8, 303, 4, 120, 25, 0.7, "35.71 | 250", 200, 7]
-				]
+				],
 				"ice_beam": [
 					[1, 22, 3, 60, 1, 0.2, 5, 50, "20%"],
 					[2, 25, 3, 60, 2, 0.2, 10, 55, "20%"],
@@ -92,14 +96,14 @@
 					[8, 338, 5, 90, 9, 0.2, 45, 200, "40%"]
 				],
 				"chain_lightning": [
-					[1, 20, 3, 80, 4, 0.8, 5, 50, 2],
-					[2, 23, 3, 80, 8, 0.8, 10, 55, 2],
-					[3, 33, 3, 80, 8, 0.7, 11.43, 65, 2],
-					[4, 49, 4, 80, 8, 0.7, 11.43, 80, 3],
-					[5, 71, 4, 80, 15, 0.7, 21.43, 100, 3],
-					[6, 100, 4, 80, 15, 0.6, 25, 125, 4],
-					[7, 135, 5, 80, 15, 0.6, 25, 150, 4],
-					[8, 354, 5, 100, 20, 0.5, 40, 200, 5]
+					[1, 20, 3, 80, 4, 0.8, "5 | 10", 50, 2],
+					[2, 23, 3, 80, 8, 0.8, "10 | 20", 55, 2],
+					[3, 33, 3, 80, 8, 0.7, "11.43 | 22.86", 65, 2],
+					[4, 49, 4, 80, 8, 0.7, "11.43 | 34.29", 80, 3],
+					[5, 71, 4, 80, 15, 0.7, "21.43 | 64.29", 100, 3],
+					[6, 100, 4, 80, 15, 0.6, "25 | 100", 125, 4],
+					[7, 135, 5, 80, 15, 0.6, "25 | 100", 150, 4],
+					[8, 354, 5, 100, 20, 0.5, "40 | 200", 200, 5]
 				],
 				"thorns_ground": [
 					[1, 27, 2, 70, 3, 2, 1.5, 50, 15],
