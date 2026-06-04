@@ -80,7 +80,8 @@ table {
     border: solid 4px #951;
 }
 th {
-
+    border: solid 3px #951;
+    background-color: rgba(255,255,255,0.5);
 }
 td {
     border: solid 2px #951;

@@ -23,45 +23,121 @@
 			<select id="select_tower">
 				<option value="archers">Archers</option>
 				<option value="fireball">Fireball</option>
+				<option value="kunai_volley">Kunai Volley</option>
 			</select>
 
 			<br><br>
-
-			<table>
-				<thead>
-					<tr>
-						<th>Level</th>
-						<th>Cost</th>
-						<th>Limit</th>
-						<th>Range</th>
-						<th>Damage</th>
-						<th>Firerate(s)</th>
-						<th>DPS</th>
-						<th>HP</th>
-						<th id="stat_especial"></th>
-					</tr>
-				</thead>
-				<tbody id="tbody">
-					</tbody>
-			</table>
+			<div>
+				<table>
+					<thead>
+						<tr>
+							<th>Level</th>
+							<th>Cost</th>
+							<th>Limit</th>
+							<th>Range (px)</th>
+							<th>Damage</th>
+							<th>Firerate (s)</th>
+							<th>DPS</th>
+							<th>HP</th>
+							<th id="stat_especial"></th>
+						</tr>
+					</thead>
+					<tbody id="tbody">
+						</tbody>
+				</table>
+				<img id="sprite_torre" src="archers.png" alt="Tower">
+			</div>
 		</main>
 
 		<script>
 			const datos = {
-
+				"archers": [
+					[1, 18, 3, 120, 5, 0.8, 6.25, 50, 1],
+					[2, 20, 3, 120, 8, 0.8, 10, 55, 1],
+					[3, 25, 4, 120, 8, 0.6, 13.33, 65, 1],
+					[4, 34, 4, 120, 8, 0.6, 13.33, 80, 2],
+					[5, 47, 5, 120, 12, 0.6, 20, 100, 2],
+					[6, 63, 5, 120, 12, 0.4, 30, 125, 2],
+					[7, 83, 6, 120, 12, 0.4, 30, 150, 3],
+					[8, 212, 6, 150, 22, 0.3, 73.33, 200, 3]
+				],
+				"fireball": [
+					[1, 25, 2, 80, 10, 1.5, 6.67, 50, 10],
+					[2, 29, 2, 80, 15, 1.5, 10, 55, 10],
+					[3, 39, 2, 80, 15, 1.3, 11.54, 65, 15],
+					[4, 57, 3, 80, 25, 1.3, 19.23, 80, 15],
+					[5, 83, 3, 90, 25, 1.1, 22.73, 100, 15],
+					[6, 115, 3, 90, 40, 1.1, 36.36, 125, 18],
+					[7, 155, 4, 90, 40, 1.1, 36.36, 150, 18],
+					[8, 403, 4, 110, 60, 0.9, 66.67, 200, 20]
+				],
+				"kunai_volley": [
+					[1, 29, 2, 90, 7, 1, 7, 50, 1],
+					[2, 32, 2, 90, 7, 0.9, 7.78, 55, 1],
+					[3, 39, 2, 90, 7, 0.9, "7.78 | 23.33", 65, 3],
+					[4, 52, 3, 90, 15, 0.9, "16.67 | 50", 80, 3],
+					[5, 69, 3, 90, 15, 0.9, "16.67 | 83.33", 100, 5],
+					[6, 92, 3, 100, 15, 0.8, "18.75 | 93.75", 125, 5],
+					[7, 119, 4, 100, 15, 0.8, "18.75 | 93.75", 150, 5],
+					[8, 303, 4, 120, 25, 0.7, "35.71 | 250", 200, 7]
+				]
+				"ice_beam": [
+					[1, 22, 3, 60, 1, 0.2, 5, 50, "20%"],
+					[2, 25, 3, 60, 2, 0.2, 10, 55, "20%"],
+					[3, 34, 3, 70, 2, 0.2, 10, 65, "25%"],
+					[4, 49, 4, 70, 4, 0.2, 20, 80, "25%"],
+					[5, 70, 4, 80, 4, 0.2, 20, 100, "30%"],
+					[6, 97, 4, 80, 6, 0.2, 30, 125, "30%"],
+					[7, 130, 5, 80, 6, 0.2, 30, 150, "30%"],
+					[8, 338, 5, 90, 9, 0.2, 45, 200, "40%"]
+				],
+				"chain_lightning": [
+					[1, 20, 3, 80, 4, 0.8, 5, 50, 2],
+					[2, 23, 3, 80, 8, 0.8, 10, 55, 2],
+					[3, 33, 3, 80, 8, 0.7, 11.43, 65, 2],
+					[4, 49, 4, 80, 8, 0.7, 11.43, 80, 3],
+					[5, 71, 4, 80, 15, 0.7, 21.43, 100, 3],
+					[6, 100, 4, 80, 15, 0.6, 25, 125, 4],
+					[7, 135, 5, 80, 15, 0.6, 25, 150, 4],
+					[8, 354, 5, 100, 20, 0.5, 40, 200, 5]
+				],
+				"thorns_ground": [
+					[1, 27, 2, 70, 3, 2, 1.5, 50, 15],
+					[2, 31, 2, 70, 5, 2, 2.5, 55, 15],
+					[3, 41, 2, 70, 5, 1.8, 2.78, 65, 15],
+					[4, 59, 3, 70, 8, 1.8, 4.44, 80, 15],
+					[5, 83, 3, 80, 8, 1.8, 4.44, 100, 20],
+					[6, 115, 3, 80, 8, 1.5, 5.33, 125, 20],
+					[7, 153, 4, 80, 8, 1.5, 5.33, 150, 20],
+					[8, 397, 4, 100, 11, 1.2, 9.17, 200, 30]
+				]
 			};
 
+			const sprite = document.getElementById("sprite_torre");
 			const select = document.getElementById("select_tower");
 			const tbody = document.getElementById("tbody");
 			const stat_especial = document.getElementById("stat_especial");
 
 			function generar_tabla() {
-
 				if (select.value === "archers") {
-					stat_especial.textContent = "HP";
+					stat_especial.textContent = "Perforation";
+					sprite.src = "arrowtower.png";
 				} else if (select.value === "fireball") {
-					stat_especial.textContent = "N/A";
-				}
+					stat_especial.textContent = "Area (px)";
+					sprite.src = "fireballtower.png";
+				} else if (select.value === "kunai_volley") {
+					stat_especial.textContent = "Projectiles";
+					sprite.src = "kunaitower.png";
+				} else if (select.value === "ice_beam") {
+					stat_especial.textContent = "Slow";
+					sprite.src = "lasertower.png";
+				} else if (select.value === "chain_lightning") {
+					stat_especial.textContent = "Bounces";
+					sprite.src = "lightningtower.png";
+				} else if (select.value === "thorns_ground") {
+					stat_especial.textContent = "Area (px)";
+					sprite.src = "thornstower.png";
+			}
 
 				const data = datos[select.value];
 
@@ -77,13 +153,13 @@
 
 					rows += "</tr>";
 
-					// Lo inyectamos en la tabla
 					tbody.innerHTML += rows;
 				}
 			}
 
 			select.addEventListener("change", generar_tabla);
 			generar_tabla();
+
 		</script>
 	</body>
 </html>
