@@ -472,18 +472,46 @@ while running:
                 for rect, opt in main_menu_rects:
                     if rect.collidepoint(mouseX, mouseY):
                         if opt == "Play":
+                            reset_game() # Reiniciamos por si venimos de salir de una partida
                             game_state = "PLAYING"
                         elif opt == "Exit":
                             running = False
                         else:
                             print(f"You clicked {opt}. It is still a work in progress, patience.")
-            if game_state == "PAUSED":
-                for rect, opt in pause_rects:
-                    if rect.collidepoint(mouseX, mouseY):
-                        if opt == "Resume":
+            elif game_state == "PAUSED":
+                if confirm_action:
+                    yes_rect = pygame.Rect(640 - 120, 360, 100, 50)
+                    no_rect = pygame.Rect(640 + 20, 360, 100, 50)
+                    if yes_rect.collidepoint(mouseX, mouseY):
+                        if confirm_action == "Restart":
+                            reset_game()
                             game_state = "PLAYING"
-                        else:
-                            print(f"You clicked {opt}. It is still a work in progress, patience.")
+                        elif confirm_action == "Main Menu":
+                            reset_game()
+                            game_state = "MAIN_MENU"
+                        confirm_action = None
+                    elif no_rect.collidepoint(mouseX, mouseY):
+                        confirm_action = None
+                else:
+                    for rect, opt in pause_rects:
+                        if rect.collidepoint(mouseX, mouseY):
+                            if opt == "Resume":
+                                game_state = "PLAYING"
+                            elif opt in ["Restart", "Retry"]:
+                                confirm_action = "Restart"
+                            elif opt in ["Main Menu", "Menu", "Quit", "Quit to Menu"]:
+                                confirm_action = "Main Menu"
+                            else:
+                                print(f"You clicked {opt}. It is still a work in progress, patience.")
+            elif game_state == "GAME_OVER":
+                restart_rect = pygame.Rect(640 - 220, 500, 200, 50)
+                quit_rect = pygame.Rect(640 + 20, 500, 200, 50)
+                if restart_rect.collidepoint(mouseX, mouseY):
+                    reset_game()
+                    game_state = "PLAYING"
+                elif quit_rect.collidepoint(mouseX, mouseY):
+                    reset_game()
+                    game_state = "MAIN_MENU"
 
         if event.type == pygame.KEYDOWN:
             if game_state == "PLAYING":
@@ -821,6 +849,47 @@ while running:
 
     if game_state == "GAME_OVER":
         draw_game_over_menu(gameboard, assets, current_minute, game_time)
+        
+        # Botones de Restart y Menu
+        restart_rect = pygame.Rect(640 - 220, 500, 200, 50)
+        quit_rect = pygame.Rect(640 + 20, 500, 200, 50)
+        
+        restart_pressed = pygame.mouse.get_pressed()[0] and restart_rect.collidepoint(mouseX, mouseY)
+        quit_pressed = pygame.mouse.get_pressed()[0] and quit_rect.collidepoint(mouseX, mouseY)
+        
+        draw_action_btn(gameboard, assets, 640 - 220, 500, 200, 50, "", "Restart", is_pressed=restart_pressed)
+        draw_action_btn(gameboard, assets, 640 + 20, 500, 200, 50, "", "Menu", is_pressed=quit_pressed)
+
+    elif game_state == "LEVEL_UP":
+        card_rects = draw_level_up_menu(gameboard, assets, level_up_options, selected_card_idx, offsetX, width_gameboard)
+        
+    elif game_state == "PAUSED":
+        pause_rects = draw_pause_menu(gameboard, assets, mouseX, mouseY)
+        
+        # --- NUEVO: MENÚ DE CONFIRMACIÓN DE REINICIO/SALIDA ---
+        if confirm_action:
+            dark_overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
+            dark_overlay.fill((0, 0, 0, 150))
+            gameboard.blit(dark_overlay, (0, 0))
+            
+            # Ribbon centrado
+            draw_ribbon(gameboard, 640 - 150, 360 - 100, 300, 80, assets.ribbon_sheet)
+            q_surf = assets.ui_font_medium.render("Are you sure?", True, "black")
+            gameboard.blit(q_surf, (640 - q_surf.get_width() // 2, 360 - 75))
+            
+            # Botones Yes y No
+            yes_rect = pygame.Rect(640 - 120, 360, 100, 50)
+            no_rect = pygame.Rect(640 + 20, 360, 100, 50)
+            
+            yes_pressed = pygame.mouse.get_pressed()[0] and yes_rect.collidepoint(mouseX, mouseY)
+            no_pressed = pygame.mouse.get_pressed()[0] and no_rect.collidepoint(mouseX, mouseY)
+            
+            draw_action_btn(gameboard, assets, 640 - 120, 360, 100, 50, "", "Yes", is_pressed=yes_pressed)
+            draw_action_btn(gameboard, assets, 640 + 20, 360, 100, 50, "", "No", is_pressed=no_pressed)
+            
+    elif game_state == "MAIN_MENU":
+        main_menu_rects = draw_main_menu(gameboard, assets, mouseX, mouseY)
+
     elif game_state == "LEVEL_UP":
         card_rects = draw_level_up_menu(gameboard, assets, level_up_options, selected_card_idx, offsetX, width_gameboard)
     elif game_state == "PAUSED":
