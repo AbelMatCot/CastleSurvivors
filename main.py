@@ -78,74 +78,106 @@ for x in range(0, col):
 # VARIABLES DE ESTADO Y DICCIONARIOS
 # =====================================================================
 show_grid = False
+confirm_action = None
+
 player_group = pygame.sprite.Group()
 enemy_group = pygame.sprite.Group()
 bullet_group = pygame.sprite.Group()
 spawn_group = pygame.sprite.Group()
 chest_group = pygame.sprite.Group()
 
-castle_obj = ArrowTower(640, 360, is_castle=True)
-player_group.add(castle_obj)
-
-current_tool = None
 game_state = "MAIN_MENU"
-unlocked_towers = ["arrow"]
-active_towers = ["arrow", None, None, None]
-level_up_options = []
-card_rects = []
-pause_rects = []
-main_menu_rects = []
 meta_health = 0
 
-player_gold = 100
-player_gems = 0
-player_level = 1
-player_xp = 0
-xp_to_next_level = 50
-selected_card_idx = None
+# Variables del Boss globales para que no peten al reiniciar
+next_boss_time = 150.0
+bosses_spawned = 0
 
-castle_max_hp = 100
-castle_hp = castle_max_hp
-structures_hp = {}
-wall_masks = {}
-ruin_masks = {}
+def reset_game():
+    global castle_obj, current_tool, unlocked_towers, active_towers
+    global level_up_options, card_rects, pause_rects, main_menu_rects
+    global player_gold, player_gems, player_level, player_xp, xp_to_next_level, selected_card_idx
+    global castle_max_hp, castle_hp, structures_hp, wall_masks, ruin_masks
+    global previous_structures_hp, damage_timers, previous_structures_types
+    global tower_levels, active_passives, passive_levels
+    global spawn_counts, existing_spawns_pos, spawn_schedule, last_built_cell
+    global game_time, current_minute, difficulty_multiplier, time_scale, grid
+    global next_boss_time, bosses_spawned
 
-previous_structures_hp = {}
-damage_timers = {}
-previous_structures_types = {}
+    player_group.empty()
+    enemy_group.empty()
+    bullet_group.empty()
+    spawn_group.empty()
+    chest_group.empty()
+    effects_group.empty()
 
-tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
+    castle_obj = ArrowTower(640, 360, is_castle=True)
+    player_group.add(castle_obj)
 
-active_passives = []
-passive_levels = {
-    "damage": 0, "firerate": 0, "range": 0, "health": 0, "regen": 0,
-    "armor": 0, "thorns": 0, "gold": 0, "xp": 0, "crit": 0
-}
+    current_tool = None
+    unlocked_towers = ["arrow"]
+    active_towers = ["arrow", None, None, None]
+    level_up_options = []
+    card_rects = []
+    pause_rects = []
+    main_menu_rects = []
 
-spawn_counts = {"North": 0, "South": 0, "East": 0, "West": 0}
-existing_spawns_pos = {"North": [], "South": [], "East": [], "West": []}
+    player_gold = 100
+    player_level = 1
+    player_xp = 0
+    xp_to_next_level = 50
+    selected_card_idx = None
 
-forced_initial_spawns = random.choice([["North", "South"], ["East", "West"]])
-random.shuffle(forced_initial_spawns)
+    castle_max_hp = 100
+    castle_hp = castle_max_hp
+    structures_hp = {}
+    wall_masks = {}
+    ruin_masks = {}
 
-for _ in range(2):
-    setup_spawn_point(spawn_group, effects_group, grid, "balanced", forced_initial_spawns, spawn_counts, existing_spawns_pos, assets)
+    previous_structures_hp = {}
+    damage_timers = {}
+    previous_structures_types = {}
 
-spawn_schedule = [
-    (90, "balanced"), (180, "balanced"), (270, "balanced"), (360, "balanced"),
-    (450, "balanced"), (540, "balanced"), (630, "balanced"), (720, "balanced"),
-    (810, "wildcard"), (900, "wildcard"),
-]
-random_time_1 = random.uniform(910, 1040)
-random_time_2 = random.uniform(910, 1040)
-spawn_schedule.extend([(random_time_1, "balanced"), (random_time_2, "balanced"), (1050, "wildcard")])
-spawn_schedule.sort(key=lambda x: x[0])
+    tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
 
-last_built_cell = None
-game_time = 0.0
-current_minute = 0
-difficulty_multiplier = 1.0
-time_scale = 1.0
+    active_passives = []
+    passive_levels = {
+        "damage": 0, "firerate": 0, "range": 0, "health": 0, "regen": 0,
+        "armor": 0, "thorns": 0, "gold": 0, "xp": 0, "crit": 0
+    }
+
+    grid = generate_initial_grid()
+
+    spawn_counts = {"North": 0, "South": 0, "East": 0, "West": 0}
+    existing_spawns_pos = {"North": [], "South": [], "East": [], "West": []}
+
+    forced_initial_spawns = random.choice([["North", "South"], ["East", "West"]])
+    random.shuffle(forced_initial_spawns)
+
+    for _ in range(2):
+        setup_spawn_point(spawn_group, effects_group, grid, "balanced", forced_initial_spawns, spawn_counts, existing_spawns_pos, assets)
+
+    spawn_schedule = [
+        (90, "balanced"), (180, "balanced"), (270, "balanced"), (360, "balanced"),
+        (450, "balanced"), (540, "balanced"), (630, "balanced"), (720, "balanced"),
+        (810, "wildcard"), (900, "wildcard"),
+    ]
+    random_time_1 = random.uniform(910, 1040)
+    random_time_2 = random.uniform(910, 1040)
+    spawn_schedule.extend([(random_time_1, "balanced"), (random_time_2, "balanced"), (1050, "wildcard")])
+    spawn_schedule.sort(key=lambda x: x[0])
+
+    last_built_cell = None
+    game_time = 0.0
+    current_minute = 0
+    difficulty_multiplier = 1.0
+    time_scale = 1.0
+    
+    next_boss_time = 150.0
+    bosses_spawned = 0
+
+# Inicializamos la primera partida al abrir el juego
+reset_game()
 
 # =====================================================================
 # BUCLE PRINCIPAL
