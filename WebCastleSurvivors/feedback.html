@@ -11,7 +11,7 @@
 			<h1>Castle Survivors</h1>
 			<nav>
 				<ul>
-					<li><a href="index.html">Play now</a></li>
+					<li><a href="index.html">Game</a></li>
 					<li><a href="towers.html">Towers</a></li>
 					<li><a href="feedback.html">Feedback</a></li>
 				</ul>
@@ -28,6 +28,11 @@
                     <label><input type="radio" name="diversion" value="3"> 3</label>
                     <label><input type="radio" name="diversion" value="4"> 4</label>
                     <label><input type="radio" name="diversion" value="5"> 5</label>
+                    <label><input type="radio" name="diversion" value="6"> 6</label>
+                    <label><input type="radio" name="diversion" value="7"> 7</label>
+                    <label><input type="radio" name="diversion" value="8"> 8</label>
+                    <label><input type="radio" name="diversion" value="9"> 9</label>
+                    <label><input type="radio" name="diversion" value="10"> 10</label>
                 </fieldset>
                 <br>
 
@@ -38,11 +43,16 @@
                     <label><input type="radio" name="balance" value="3"> 3</label>
                     <label><input type="radio" name="balance" value="4"> 4</label>
                     <label><input type="radio" name="balance" value="5"> 5</label>
+                    <label><input type="radio" name="balance" value="6"> 6</label>
+                    <label><input type="radio" name="balance" value="7"> 7</label>
+                    <label><input type="radio" name="balance" value="8"> 8</label>
+                    <label><input type="radio" name="balance" value="9"> 9</label>
+                    <label><input type="radio" name="balance" value="10"> 10</label>
                 </fieldset>
                 <br>
 
-                <label for="parte_ajustar">Which part do you think needs adjustment?</label><br>
-                <input list="opciones_ajuste" id="parte_ajustar" name="parte_ajustar">
+                <label for="parte_ajustar">Which part do you think needs more work?</label><br>
+                <input class="texto" list="opciones_ajuste" id="parte_ajustar" name="parte_ajustar">
                 <datalist id="opciones_ajuste">
                     <option value="Towers"></option>
                     <option value="Enemies"></option>
@@ -52,7 +62,7 @@
                 <br><br>
 
                 <label for="detalles_mejora">What exactly would you improve about that part?</label><br>
-                <input type="text" id="detalles_mejora" name="detalles_mejora" size="40">
+                <input class="texto" type="text" id="detalles_mejora" name="detalles_mejora" size="40">
                 <br><br>
 
                 <label for="otras_sugerencias">Other suggestions:</label><br>
@@ -62,5 +72,8 @@
                 <button type="submit">Submit Feedback</button>
             </form>
         </main>
+        <footer>
+			<p>&copy; 2026 AbelMatCot. All rights reserved.</p>
+		</footer>
     </body>
 </html>

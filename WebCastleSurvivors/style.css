@@ -20,33 +20,45 @@ body {
     margin: 0;
 }
 header {
-	background-color: rgba(255,255,255,0.5);
-	width: 70%;
-	margin: 20px auto;
+    background-color: rgba(255, 255 ,255 , 0.4);
+    width: 40%;
+    margin: 20px auto;
+    border: solid 4px #951;
+    border-radius: 20px;
+    box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.3);
+    text-align: center;
 }
+
 h1 {
-	margin: 0;
-	padding: 15px 15px 5px 15px;
+    margin: 0;
+    padding: 15px 15px 5px 15px;
+    color: #fff;
+    text-shadow: -2px 0 black, 0 2px black, 2px 0 black, 0 -2px black;
 }
+
 nav {
-	background-color: rgba(255,255,255,0.5);
-	font-size: 24px;
-    padding: 15px 0px;
+    background-color: transparent;
+    font-size: 24px;
+    padding: 10px 0px 20px 0px;
 }
+
 nav ul {
-	text-align: center;
-	list-style: none;
-	display: flex;
-	margin: 0;
-	padding: 0;
+    justify-content: space-around;
+    list-style: none;
+    display: flex;
+    margin: 0;
+    padding: 0;
 }
 nav li a {
 	padding: 17px 30px;
 	text-decoration: none;
 	color: black;
+	transition: border, background-color 0.5s;
+	border-radius: 15px;
 }
 nav li a:hover {
-	background-color: rgba(116, 171, 75,0.5);
+	background-color: rgba(116, 171, 75,0.7);
+	border: solid 2px rgba(0, 0, 0, 0.5);
 }
 main {
 	background-color: rgba(252, 234, 195,0.8);
@@ -54,8 +66,7 @@ main {
 	margin: auto;
 	padding: 2%;
 	border: solid 5px #951;
-	border-radius: 3rem;
-
+	border-radius: 20px;
 }
 h3, h2 {
     margin: 20px 0px -8px 20px;
@@ -69,14 +80,21 @@ p span {
     font-weight: bold;
     font-size: 20px;
 }
-
+div.imagen {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+div.imagen img{
+    height: 210px;
+}
 footer {
-
     background-color: rgba(0,0,0,0.8);
     color: #fff;
     text-align: center;
     padding: 1px;
     font-size: 16px;
+    margin-top: 20px;
 }
 div.torres {
     display: flex;
@@ -101,4 +119,88 @@ div.torres img {
     width: 120px;
     margin: 10px 0 30px 40px;
     image-rendering: pixelated;
+}
+select {
+    font-family: "Alagard", sans-serif;
+    font-size: 20px;
+    background-color: rgba(255, 255, 255, 0.7);
+    border: 3px solid #951;
+    border-radius: 8px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+select:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+fieldset {
+    border: 3px solid #951;
+    border-radius: 15px;
+    background-color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 20px;
+    padding: 10px 20px;
+}
+
+label {
+    cursor: pointer;
+    margin-right: 15px;
+}
+
+
+input.texto, textarea {
+    font-family: "Alagard";
+    font-size: 18px;
+    background-color: rgba(255, 255, 255, 0.7);
+    border: 3px solid #951;
+    border-radius: 8px;
+    padding: 8px;
+    width: 100%;
+    margin-top: 5px;
+}
+
+textarea {
+    resize: vertical;
+}
+button {
+    font-family: "Alagard";
+    font-size: 20px;
+    background-color: #951;
+    color: white;
+    border: 3px solid black;
+    border-radius: 12px;
+    padding: 12px 25px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: rgb(116, 171, 75);
+
+}
+div.boton_jugar {
+    text-align: center;
+    margin: 10px 0 30px 0;
+}
+
+div.boton_jugar a {
+    display: inline-block;
+    font-family: "Alagard";
+    font-size: 36px;
+    color: white;
+    background-color: rgba(116, 171, 75, 1);
+    padding: 15px 50px;
+    text-decoration: none;
+    border: 5px solid #951;
+    border-radius: 12px;
+    text-shadow: -2px 0 black, 0 2px black, 2px 0 black, 0 -2px black;
+    box-shadow: 0px 8px 0px #4a2808, 0px 12px 15px rgba(0, 0, 0, 0.5);
+    transition: all 0.1s ease-in-out;
+}
+div.boton_jugar a:hover {
+    background-color: #951;
+    border-color: rgba(0, 0, 0, 0.7);
+    transform: translateY(3px);
+    box-shadow: 0px 6px 0px #4a2808, 0px 8px 10px rgba(0, 0, 0, 0.5);
 }
