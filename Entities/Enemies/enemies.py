@@ -10,6 +10,7 @@ generator_sheet = None
 swarmer_sheet = None
 shooter_sheet = None
 shooter_fx_sheet = None
+boss_sheet = None
 
 def get_enemy_frames(sheet, row, num_frames, scale=1.0):
     frames = []
@@ -72,7 +73,6 @@ class Enemy(pygame.sprite.Sprite):
         self.is_attacking = False
         self.dir_norm = pygame.math.Vector2(1, 0)
 
-        # --- NUEVO: VARIABLES DE ANIMACIÓN BASE ---
         self.state = "walk"
         self.current_frame = 0
         self.anim_timer = 0.0
@@ -80,7 +80,6 @@ class Enemy(pygame.sprite.Sprite):
         self.is_dying = False
 
     def take_damage(self, amount):
-        # Si está muriendo O es intargeteable, ignora el daño
         if getattr(self, "is_dying", False) or getattr(self, "is_untargetable", False):
             return
         self.health -= amount
@@ -91,7 +90,7 @@ class Enemy(pygame.sprite.Sprite):
         self.speed = self.base_speed * factor
         self.slow_timer = duration
 
-    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+    def update(self, dt, grid, enemy_group=None, effects_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
 
         if self.slow_timer > 0:
             self.slow_timer -= dt
@@ -102,18 +101,16 @@ class Enemy(pygame.sprite.Sprite):
         if self.is_dying:
             if hasattr(self, "animations") and "death" in self.animations:
                 self.anim_timer += dt
-                if self.anim_timer >= 0.1:  # Velocidad de la muerte
+                if self.anim_timer >= 0.1:
                     self.anim_timer = 0.0
                     self.current_frame += 1
 
                 if self.current_frame < len(self.animations["death"]):
-                    # Refrescamos la imagen en cada frame, no solo al cambiar de animación
                     frame_img = self.animations["death"][self.current_frame]
                     if not self.facing_right:
                         frame_img = pygame.transform.flip(frame_img, True, False)
                     self.image = frame_img.copy()
 
-                    # Le metemos el mismo parche de pintura brillante
                     if self.is_flashing:
                         self.flash_timer -= dt
                         if self.flash_timer > 0:
@@ -123,7 +120,7 @@ class Enemy(pygame.sprite.Sprite):
                 else:
                     self.kill()
             else:
-                self.kill()  # Si no tiene sprite, muere al instante
+                self.kill()
             return
 
         # 2. DIRECCIÓN Y MOVIMIENTO BÁSICO
@@ -172,7 +169,7 @@ class Enemy(pygame.sprite.Sprite):
                                 grid[grid_y][grid_x] = 0
                                 del structures_hp[coords]
                     elif cell == 3:
-                        pass  # El daño al castillo ya lo gestiona el main.py
+                        pass
 
                     thorns_lvl = passive_levels.get("thorns", 0) if passive_levels else 0
                     if thorns_lvl > 0 and thorns_values:
@@ -193,9 +190,8 @@ class Enemy(pygame.sprite.Sprite):
             self.state = new_state
             self.current_frame = 0
 
-        # 5. RENDERIZADO VISUAL (Sprites vs Círculos)
+        # 5. RENDERIZADO VISUAL
         if hasattr(self, "animations") and self.state in self.animations:
-            # Tiene Sprites
             self.anim_timer += dt
             if self.anim_timer >= 0.1:
                 self.anim_timer = 0.0
@@ -206,7 +202,6 @@ class Enemy(pygame.sprite.Sprite):
                 frame_img = pygame.transform.flip(frame_img, True, False)
             self.image = frame_img.copy()
 
-            # ¡AQUÍ ESTÁ EL FIX! Actualizamos el rect a la nueva imagen
             self.rect = self.image.get_rect()
 
             if self.is_flashing:
@@ -216,7 +211,6 @@ class Enemy(pygame.sprite.Sprite):
                 else:
                     self.is_flashing = False
         else:
-            # Fallback de Círculos para enemigos sin sprite todavía
             if self.is_flashing:
                 self.flash_timer -= dt
                 if self.flash_timer > 0:
@@ -229,8 +223,6 @@ class Enemy(pygame.sprite.Sprite):
 
         self.rect.center = (round(self.pos.x), round(self.pos.y))
 
-
-# SUBCLASES DE ENEMIGOS
 
 class Basic(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
@@ -246,9 +238,7 @@ class Basic(Enemy):
             "attack": get_enemy_frames(basic_sheet, 2, 6),
             "death": get_enemy_frames(basic_sheet, 5, 5)
         }
-
         self.image = self.animations[self.state][self.current_frame]
-
 
 class Fast(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
@@ -260,13 +250,11 @@ class Fast(Enemy):
             fast_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "fast.png")).convert_alpha()
 
         self.animations = {
-            "walk": get_enemy_frames(fast_sheet, 1, 8),  # Fila 2
-            "attack": get_enemy_frames(fast_sheet, 2, 4),  # Fila 3
-            "death": get_enemy_frames(fast_sheet, 5, 8)  # Fila 6
+            "walk": get_enemy_frames(fast_sheet, 1, 8),
+            "attack": get_enemy_frames(fast_sheet, 2, 4),
+            "death": get_enemy_frames(fast_sheet, 5, 8)
         }
-
         self.image = self.animations[self.state][self.current_frame]
-
 
 class Tank(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
@@ -278,11 +266,10 @@ class Tank(Enemy):
             tank_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "tank.png")).convert_alpha()
 
         self.animations = {
-            "walk": get_enemy_frames(tank_sheet, 1, 8),  # Fila 2
-            "attack": get_enemy_frames(tank_sheet, 2, 6),  # Fila 3
-            "death": get_enemy_frames(tank_sheet, 4, 6)  # Fila 5
+            "walk": get_enemy_frames(tank_sheet, 1, 8),
+            "attack": get_enemy_frames(tank_sheet, 2, 6),
+            "death": get_enemy_frames(tank_sheet, 4, 6)
         }
-
         self.image = self.animations[self.state][self.current_frame]
 
 class Flyer(Enemy):
@@ -296,32 +283,27 @@ class Flyer(Enemy):
             flyer_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "flyer.png")).convert_alpha()
 
         self.animations = {
-            "walk": get_enemy_frames(flyer_sheet, 0, 4),  # Fila 1
-            "attack": get_enemy_frames(flyer_sheet, 2, 4),  # Fila 3
-            "death": get_enemy_frames(flyer_sheet, 3, 6)  # Fila 4
+            "walk": get_enemy_frames(flyer_sheet, 0, 4),
+            "attack": get_enemy_frames(flyer_sheet, 2, 4),
+            "death": get_enemy_frames(flyer_sheet, 3, 6)
         }
-
         self.image = self.animations[self.state][self.current_frame]
-
 
 class AttachedLeaf(pygame.sprite.Sprite):
     def __init__(self, trent):
         super().__init__()
         self.trent = trent
         self.scale = 0.0
-        self.health = 0
-        self.is_dying = False
 
         global swarmer_sheet
         if swarmer_sheet is None:
-            swarmer_sheet = pygame.image.load(
-                os.path.join("Assets", "Sprites", "Enemies", "swarmer.png")).convert_alpha()
+            swarmer_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "swarmer.png")).convert_alpha()
 
         self.base_img = get_enemy_frames(swarmer_sheet, 0, 1)[0]
         self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
         self.rect = self.image.get_rect()
 
-    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+    def update(self, dt):
         if not self.trent.alive() or getattr(self.trent, "is_dying", False):
             self.kill()
             return
@@ -329,16 +311,12 @@ class AttachedLeaf(pygame.sprite.Sprite):
         self.scale = min(1.0, self.scale + dt * 1.4)
         size = max(1, int(24 * self.scale))
 
-        # Escalamos y volteamos la carita de la hoja si el Trent gira
         img = pygame.transform.scale(self.base_img, (size, size))
         if not self.trent.facing_right:
             img = pygame.transform.flip(img, True, False)
 
         self.image = img
-
-        # --- EL FIX: ACTUALIZAR EL TAMAÑO ANCLANDO LA BASE ---
         self.rect = self.image.get_rect(midbottom=self.rect.midbottom)
-
         self.y_sort = self.trent.rect.bottom + 1
 
 class Swarmer(Enemy):
@@ -348,23 +326,20 @@ class Swarmer(Enemy):
 
         global swarmer_sheet
         if swarmer_sheet is None:
-            swarmer_sheet = pygame.image.load(
-                os.path.join("Assets", "Sprites", "Enemies", "swarmer.png")).convert_alpha()
+            swarmer_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "swarmer.png")).convert_alpha()
 
         self.animations = {
-            "idle": get_enemy_frames(swarmer_sheet, 0, 4),  # Fila 1
-            "walk": get_enemy_frames(swarmer_sheet, 1, 4),  # Fila 2
-            "attack": get_enemy_frames(swarmer_sheet, 5, 4),  # Fila 6
-            "death": get_enemy_frames(swarmer_sheet, 4, 6)  # Fila 5
+            "idle": get_enemy_frames(swarmer_sheet, 0, 4),
+            "walk": get_enemy_frames(swarmer_sheet, 1, 4),
+            "attack": get_enemy_frames(swarmer_sheet, 5, 4),
+            "death": get_enemy_frames(swarmer_sheet, 4, 6)
         }
 
-        # Lógica de "Paracaidista"
         if fall_start_pos:
             self.pos = pygame.math.Vector2(fall_start_pos)
             self.ground_y = pixel_y
             self.is_falling = True
-            self.health = 3  # <--- ¡Le devolvemos su vida real!
-            self.is_untargetable = True  # <--- NUEVA FLAG: Inmune y camuflado
+            self.is_untargetable = True
             self.custom_state = "idle"
         else:
             self.is_falling = False
@@ -373,9 +348,7 @@ class Swarmer(Enemy):
 
         self.image = self.animations[getattr(self, "custom_state", "walk")][self.current_frame]
 
-        # En enemies.py -> clase Swarmer -> def update(...)
-
-    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+    def update(self, dt, grid, enemy_group=None, effects_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
         if getattr(self, "is_falling", False):
             self.pos.y += 50.0 * dt
 
@@ -389,8 +362,6 @@ class Swarmer(Enemy):
                 frame_img = pygame.transform.flip(frame_img, True, False)
             self.image = frame_img.copy()
 
-            # --- EL FIX ---
-            # Reajustamos el rect antes de centrarlo, igual que en la clase padre
             self.rect = self.image.get_rect()
             self.rect.center = (round(self.pos.x), round(self.pos.y))
 
@@ -401,23 +372,22 @@ class Swarmer(Enemy):
                 if hasattr(self, "y_sort"): del self.y_sort
             return
 
-        super().update(dt, grid, enemy_group, structures_hp, passive_levels, thorns_values)
+        super().update(dt, grid, enemy_group, effects_group, structures_hp, passive_levels, thorns_values)
+
 
 class Generator(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # Volvemos a escala 2.0 y radio 16
         super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=60, speed=25.0, color="purple", radius=16,
                          xp_value=25, gold_value=15, base_damage=5)
 
         self.my_leaves = []
         self.spawn_timer = 0.0
-        self.jump_cooldown = 1.2  # Descansa solo 1.2 segundos entre saltos
+        self.jump_cooldown = 1.2
         self.is_waiting = True
 
         global generator_sheet
         if generator_sheet is None:
-            generator_sheet = pygame.image.load(
-                os.path.join("Assets", "Sprites", "Enemies", "generator.png")).convert_alpha()
+            generator_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Enemies", "generator.png")).convert_alpha()
 
         self.animations = {
             "walk": get_enemy_frames(generator_sheet, 1, 8, scale=2.0),
@@ -428,8 +398,8 @@ class Generator(Enemy):
 
         self.image = self.animations[self.state][self.current_frame]
 
-    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
-        min_dist = float('inf')
+    def update(self, dt, grid, enemy_group=None, effects_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+        min_dist = float("inf")
         if structures_hp:
             for (r, c) in structures_hp.keys():
                 struct_pos = pygame.math.Vector2(self.offset_x + c * self.grid_size + self.grid_size / 2,
@@ -444,7 +414,6 @@ class Generator(Enemy):
         else:
             self.custom_state = "walk"
 
-        # --- LÓGICA DE TIEMPOS Y DASH AVANZADA ---
         if self.state in ["walk", "idle_spawn"] and self.current_frame in [0, 4]:
             self.is_waiting = True
         else:
@@ -455,34 +424,28 @@ class Generator(Enemy):
             self.spawn_timer += dt
             if self.spawn_timer >= self.jump_cooldown:
                 self.spawn_timer = 0.0
-                # ¡Rompe el hielo! Obligamos al reloj de animación a dar el salto al siguiente frame
                 self.anim_timer = 0.1
             else:
-                # Congelación perfecta: le restamos el tiempo que la clase padre le va a sumar
                 self.anim_timer = -dt
         else:
-            self.speed = 35.0  # Dash potente para recorrer buena distancia
-            # Ralentizamos la animación en el aire para que el salto parezca "flotante" y dure más
+            self.speed = 35.0
             self.anim_timer -= dt * 0.65
 
         old_frame = self.current_frame
-        super().update(dt, grid, enemy_group, structures_hp, passive_levels, thorns_values)
+        super().update(dt, grid, enemy_group, effects_group, structures_hp, passive_levels, thorns_values)
         new_frame = self.current_frame
 
-        # --- SINCRONIZACIÓN DE HOJAS ---
         if self.state in ["walk", "idle_spawn"] and not getattr(self, "is_dying", False):
             is_jump_start = (new_frame in [1, 5] and old_frame not in [1, 5])
             is_landing = (new_frame in [0, 4] and old_frame not in [0, 4])
 
             if is_jump_start and len(self.my_leaves) == 0:
-                # Ahora solo instanciamos, el posicionamiento va debajo
                 for _ in range(3):
                     leaf = AttachedLeaf(self)
-                    if enemy_group is not None:
-                        enemy_group.add(leaf)
+                    if effects_group is not None:
+                        effects_group.add(leaf)
                     self.my_leaves.append(leaf)
 
-            # ¡AQUÍ ESTÁ LA MAGIA! Clavamos las hojas a su cabeza en tiempo real
             if len(self.my_leaves) > 0:
                 offsets = [(-8, 2), (0, -2), (8, 0)]
                 for i, leaf in enumerate(self.my_leaves):
@@ -490,16 +453,13 @@ class Generator(Enemy):
                     if not self.facing_right:
                         ox = -ox
 
-                    # --- COMPENSADOR SOLO VERTICAL ---
                     shift_y = 0
-                    # Si está en los frames donde salta y se estira:
                     if self.current_frame in [1, 2, 3, 5, 6, 7]:
-                        shift_y = -6  # Sube un poco, pero no se mueve hacia los lados
+                        shift_y = -6
 
                     final_x = self.pos.x + ox
                     final_y = self.pos.y + oy + shift_y
 
-                    # Crecen desde la base sin despegarse
                     leaf.rect.midbottom = (round(final_x), round(final_y))
 
             if is_landing and len(self.my_leaves) > 0:
@@ -512,7 +472,6 @@ class Generator(Enemy):
                     swarmer = Swarmer(gx, gy, self.grid_size, self.offset_x, fall_start_pos=(sx, sy))
 
                     swarmer.facing_right = self.facing_right
-                    # --- NUEVO: CÓDIGO LIMPIO. HEREDAN LA PROFUNDIDAD DEL TRENT ---
                     swarmer.y_sort = self.rect.bottom + 1
 
                     if enemy_group is not None:
@@ -520,14 +479,19 @@ class Generator(Enemy):
                 self.my_leaves.clear()
 
 
-class ShooterEffect(pygame.sprite.Sprite):
+class MuzzleFlashEffect(pygame.sprite.Sprite):
     def __init__(self, x, y, flip):
         super().__init__()
-        global shooter_fx_sheet
-        # Asegúrate de que shooter_fx_sheet esté cargado
-        self.frames = get_enemy_frames(shooter_fx_sheet, 0, 6)  # Fila 0, 6 frames
-        if flip:
-            self.frames = [pygame.transform.flip(f, True, False) for f in self.frames]
+        global shooter_sheet
+
+        # Extraemos los 32x32 píxeles enteros de la fila 6 (índice 5)
+        self.frames = []
+        for i in range(4):
+            frame = pygame.Surface((32, 32), pygame.SRCALPHA)
+            frame.blit(shooter_sheet, (0, 0), (i * 32, 5 * 32, 32, 32))
+            if flip:
+                frame = pygame.transform.flip(frame, True, False)
+            self.frames.append(frame)
 
         self.current_frame = 0
         self.anim_timer = 0.0
@@ -536,7 +500,40 @@ class ShooterEffect(pygame.sprite.Sprite):
 
     def update(self, dt):
         self.anim_timer += dt
-        if self.anim_timer >= 0.08:  # Un poco más rápido que el enemigo
+        if self.anim_timer >= 0.08:
+            self.anim_timer = 0.0
+            self.current_frame += 1
+            if self.current_frame < len(self.frames):
+                self.image = self.frames[self.current_frame]
+            else:
+                self.kill()
+
+
+class TargetHitEffect(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        global shooter_fx_sheet
+
+        w = shooter_fx_sheet.get_width() // 6
+        h = shooter_fx_sheet.get_height()
+
+        self.frames = []
+        for i in range(6):
+            frame = pygame.Surface((w, h), pygame.SRCALPHA)
+            # CORREGIDO: Ya usa su propia sprite sheet
+            frame.blit(shooter_fx_sheet, (0, 0), (i * w, 0, w, h))
+            # Ajustado a 20x20 píxeles fijos para que no sea gigantesco
+            frame = pygame.transform.scale(frame, (20, 20))
+            self.frames.append(frame)
+
+        self.current_frame = 0
+        self.anim_timer = 0.0
+        self.image = self.frames[0]
+        self.rect = self.image.get_rect(center=(x, y))
+
+    def update(self, dt):
+        self.anim_timer += dt
+        if self.anim_timer >= 0.08:
             self.anim_timer = 0.0
             self.current_frame += 1
             if self.current_frame < len(self.frames):
@@ -552,62 +549,249 @@ class Shooter(Enemy):
 
         self.range = 75
         self.attack_cooldown = 1.2
+        self.shot_castle = 0
+        self.target_cells = ()
+        self.has_shot_this_cycle = False
 
-        global shooter_sheet
+        global shooter_sheet, shooter_fx_sheet
         if shooter_sheet is None:
             shooter_sheet = pygame.image.load(
                 os.path.join("Assets", "Sprites", "Enemies", "shooter.png")).convert_alpha()
+        if shooter_fx_sheet is None:
+            shooter_fx_sheet = pygame.image.load(
+                os.path.join("Assets", "Sprites", "Enemies", "shooter_fx.png")).convert_alpha()
 
         self.animations = {
+            "idle": get_enemy_frames(shooter_sheet, 0, 4),  # NUEVO: Cargamos la fila 0
             "walk": get_enemy_frames(shooter_sheet, 1, 8),
             "attack": get_enemy_frames(shooter_sheet, 2, 6),
             "death": get_enemy_frames(shooter_sheet, 4, 6)
         }
         self.image = self.animations["walk"][0]
 
-    def update(self, dt, grid, enemy_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
-        # Lógica de detección de rango 75px
-        target = None
-        # Simplificamos: buscamos cualquier cosa que sea targeteable (estructuras o castillo)
-        # Puedes iterar sobre structures_hp.keys() para encontrar el más cercano
+    def update(self, dt, grid, enemy_group=None, effects_group=None, structures_hp=None, passive_levels=None,
+               thorns_values=None):
+        if getattr(self, "is_dying", False):
+            super().update(dt, grid, enemy_group, effects_group, structures_hp, passive_levels, thorns_values)
+            return
 
-        if structures_hp:
+        target_pos = None
+        target_coords = None
+        is_castle_target = False
+
+        castle_center = pygame.math.Vector2(640, 360)
+        if self.pos.distance_to(castle_center) <= self.range:
+            target_pos = castle_center
+            is_castle_target = True
+
+        if not target_pos and structures_hp:
             for (r, c) in structures_hp.keys():
                 s_pos = pygame.math.Vector2(self.offset_x + c * self.grid_size + 15, r * self.grid_size + 15)
                 if self.pos.distance_to(s_pos) <= self.range:
-                    target = s_pos
+                    target_pos = s_pos
+                    target_coords = (r, c)
                     break
 
-        if target:
-            self.is_attacking = True
-            self.dir_norm = (target - self.pos).normalize() if (target - self.pos).length() > 0 else self.dir_norm
+        old_pos = pygame.math.Vector2(self.pos)
+
+        if target_pos:
+            dir_vec = target_pos - self.pos
+            if dir_vec.length() > 0:
+                self.dir_norm = dir_vec.normalize()
+
             self.attack_timer += dt
 
-            if self.attack_timer >= self.attack_cooldown:
-                self.attack_timer = 0.0
-                # Spawnear el efecto visual de ataque (fila 6 / index 5)
-                # Lo spawnemos justo delante del mago
-                fx_offset = 20 if self.facing_right else -20
-                fx = ShooterEffect(self.pos.x + fx_offset, self.pos.y, not self.facing_right)
-                if enemy_group: enemy_group.add(fx)
-
-                # Hitscan damage
-                # Aquí aplicarías el daño al objeto targeteado (tendrías que pasarle el objeto, no solo la posición)
-                # Por simplicidad ahora, el enemigo hace daño al terminar el cooldown
-                pass
+            # MAGIA DEL TIMING: Si falta medio segundo para el ataque, iniciamos la animación.
+            # Si no, se queda respirando en idle.
+            if self.attack_timer >= (self.attack_cooldown - 0.6):
+                self.custom_state = "attack"
+            else:
+                self.custom_state = "idle"
         else:
-            self.is_attacking = False
+            self.custom_state = "walk"
 
-        super().update(dt, grid, enemy_group, structures_hp, passive_levels, thorns_values)
-# todo shooter
-"""
-Hitscan Real: En el update, cuando self.attack_timer >= self.attack_cooldown, no hagas solo pass. Busca el objeto en structures_hp que está en target y resta self.base_damage.
+        # La clase base se encarga de cambiar los frames por nosotros
+        super().update(dt, grid, enemy_group, effects_group, structures_hp, passive_levels, thorns_values)
 
-Shooter_fx.png: Asegúrate de que shooter_fx_sheet se carga igual que los otros pygame.image.load en la inicialización de los globales.
+        if target_pos:
+            self.pos = old_pos
+            self.rect.center = (round(self.pos.x), round(self.pos.y))
 
-Fila 6: He asumido que la fila 6 (índice 5 en el array) es el efecto visual de disparo. Si resulta que el efecto de la fila 6 es la propia animación del mago disparando (y no un sprite aparte), entonces solo tendrías que añadir esa animación al diccionario self.animations en lugar de crear la clase ShooterEffect. ¡Eso lo vemos mañana!
-"""
+            # Disparamos JUSTO en el frame 3 de la animación de ataque
+            if self.state == "attack" and self.current_frame == 3:
+                if not self.has_shot_this_cycle:
+                    self.has_shot_this_cycle = True
+
+                    fx_offset = 20 if self.facing_right else -20
+                    muzzle = MuzzleFlashEffect(self.pos.x + fx_offset, self.pos.y - 8, not self.facing_right)
+                    hit = TargetHitEffect(target_pos.x, target_pos.y)
+
+                    if effects_group is not None:
+                        effects_group.add(muzzle)
+                        effects_group.add(hit)
+
+                    armor_lvl = passive_levels.get("armor", 0) if passive_levels else 0
+                    damage_reduction = 1.0 - (armor_lvl * 0.05)
+                    final_damage = max(1, int(self.base_damage * damage_reduction))
+
+                    if is_castle_target:
+                        self.shot_castle = final_damage
+                    elif target_coords and structures_hp:
+                        structures_hp[target_coords] -= final_damage
+                        if structures_hp[target_coords] <= 0:
+                            grid[target_coords[0]][target_coords[1]] = 0
+                            del structures_hp[target_coords]
+
+            # Reseteo limpio al terminar los 1.2 segundos
+            if self.attack_timer >= self.attack_cooldown:
+                self.attack_timer -= self.attack_cooldown
+                self.has_shot_this_cycle = False
+        else:
+            self.attack_timer = max(0.0, self.attack_timer - dt)
+            self.has_shot_this_cycle = False
+
+
 class Boss(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        # 100 HP: Un verdadero dolor de muelas para el late-game
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=100, speed=30.0, color="magenta", radius=28, xp_value=30, gold_value=100, base_damage=50)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=200, speed=15, color="magenta", radius=28, xp_value=0, gold_value=0, base_damage=40)
+
+        # ¡CLAVE! Lo dejamos vacío para ANULAR el daño y ataques de la clase Enemy genérica
+        self.target_cells = ()
+        self.attack_cooldown = 1.8
+        self.range = 75
+        self.has_hit_this_cycle = False
+        self.current_attack = "attack1"
+        self.castle_attack_timer = -99999.0  # Antifallos de main.py
+
+        global boss_sheet
+        if boss_sheet is None:
+            boss_sheet = pygame.image.load(
+                os.path.join("Assets", "Sprites", "Enemies", "boss_minotaur.png")).convert_alpha()
+
+        self.animations = {
+            "idle": self._get_boss_frames(boss_sheet, 0, 5),
+            "walk": self._get_boss_frames(boss_sheet, 1, 8),
+            "attack1": self._get_boss_frames(boss_sheet, 3, 9),
+            "attack2": self._get_boss_frames(boss_sheet, 6, 9),
+            "death": self._get_boss_frames(boss_sheet, 9, 6)
+        }
+        self.image = self.animations["walk"][0]
+
+    def _get_boss_frames(self, sheet, row, num_frames, scale=1.5):
+        frames = []
+        h = sheet.get_height() // 10
+        w = h
+        for i in range(num_frames):
+            frame = pygame.Surface((w, h), pygame.SRCALPHA)
+            frame.blit(sheet, (0, 0), (i * w, row * h, w, h))
+            scaled = pygame.transform.scale(frame, (int(w * scale), int(h * scale)))
+            frames.append(scaled)
+        return frames
+
+    def update(self, dt, grid, enemy_group=None, effects_group=None, structures_hp=None, passive_levels=None, thorns_values=None):
+        if getattr(self, "is_dying", False):
+            super().update(dt, grid, enemy_group, effects_group, structures_hp, passive_levels, thorns_values)
+            self.rect = self.image.get_rect()
+            self.rect.midbottom = (round(self.pos.x), round(self.pos.y) + self.radius)
+            return
+
+        target_pos = None
+        target_coords = None
+        is_castle_target = False
+
+        castle_center = pygame.math.Vector2(640, 360)
+
+        # Detectar el Castillo primero
+        if self.pos.distance_to(castle_center) <= self.range:
+            target_pos = castle_center
+            is_castle_target = True
+
+        # Detectar Muros/Torres si no hay castillo a tiro
+        if not target_pos and structures_hp:
+            for (r, c) in structures_hp.keys():
+                s_pos = pygame.math.Vector2(self.offset_x + c * self.grid_size + 15, r * self.grid_size + 15)
+                if self.pos.distance_to(s_pos) <= self.range:
+                    target_pos = s_pos
+                    target_coords = (r, c)
+                    break
+
+        old_pos = pygame.math.Vector2(self.pos)
+
+        if target_pos:
+            dir_vec = target_pos - self.pos
+            if dir_vec.length() > 0:
+                self.dir_norm = dir_vec.normalize()
+
+            self.attack_timer += dt
+
+            if self.attack_timer >= (self.attack_cooldown - 0.9):
+                self.custom_state = self.current_attack
+            else:
+                self.custom_state = "idle"
+        else:
+            self.custom_state = "walk"
+            self.attack_timer = max(0.0, self.attack_timer - dt)
+
+        # Update de físicas
+        super().update(dt, grid, enemy_group, effects_group, structures_hp, passive_levels, thorns_values)
+
+        if target_pos:
+            self.pos = old_pos  # Se clava en el suelo al atacar
+
+            # ¡EL IMPACTO DEL HACHA! (Frame 5)
+            if self.state in ["attack1", "attack2"] and self.current_frame == 5:
+                if not self.has_hit_this_cycle:
+                    self.has_hit_this_cycle = True
+
+                    armor_lvl = passive_levels.get("armor", 0) if passive_levels else 0
+                    damage_reduction = 1.0 - (armor_lvl * 0.05)
+                    final_damage = max(1, int(self.base_damage * damage_reduction))
+
+                    hit_castle = False
+                    center_r, center_c = None, None
+
+                    if is_castle_target:
+                        self.shot_castle = final_damage
+                        hit_castle = True
+                        center_r = int(360 // self.grid_size)
+                        center_c = int(640 // self.grid_size)
+                    elif target_coords:
+                        center_r, center_c = target_coords
+
+                    # AREA DE DAÑO 3x3
+                    if center_r is not None and center_c is not None and structures_hp is not None:
+                        for dr in [-1, 0, 1]:
+                            for dc in [-1, 0, 1]:
+                                r_aoe = center_r + dr
+                                c_aoe = center_c + dc
+                                coords = (r_aoe, c_aoe)
+
+                                # Si hay muro o torre, lo reventamos
+                                if coords in structures_hp:
+                                    structures_hp[coords] -= final_damage
+                                    if structures_hp[coords] <= 0:
+                                        grid[r_aoe][c_aoe] = 0
+                                        del structures_hp[coords]
+
+                                # Si el área 3x3 roza el castillo y no le habíamos pegado ya...
+                                if not hit_castle:
+                                    cell_px = pygame.math.Vector2(self.offset_x + c_aoe * self.grid_size + self.grid_size / 2,
+                                                                  r_aoe * self.grid_size + self.grid_size / 2)
+                                    if cell_px.distance_to(castle_center) < 60:
+                                        self.shot_castle = final_damage
+                                        hit_castle = True
+
+                    # Daño devuelto por espinas (solo 1 vez por hachazo)
+                    thorns_lvl = passive_levels.get("thorns", 0) if passive_levels else 0
+                    if thorns_lvl > 0 and thorns_values:
+                        self.take_damage(thorns_values[thorns_lvl])
+
+            if self.attack_timer >= self.attack_cooldown:
+                self.attack_timer -= self.attack_cooldown
+                self.has_hit_this_cycle = False
+                self.current_attack = random.choice(["attack1", "attack2"])
+        else:
+            self.has_hit_this_cycle = False
+
+        self.rect = self.image.get_rect()
+        self.rect.midbottom = (round(self.pos.x), round(self.pos.y) + self.radius)

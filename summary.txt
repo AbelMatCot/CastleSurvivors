@@ -1,0 +1,43 @@
+Contexto del Proyecto: "Castle Survivors"
+
+Estoy desarrollando un juego en Python usando Pygame llamado "Castle Survivors" (Tower Defense / Supervivencia). El código está altamente modularizado. A continuación detallo la arquitectura, la responsabilidad de cada archivo y las reglas del motor para que puedas ayudarme a escribir código nuevo sin romper la estructura.
+
+1. Archivos Raíz (Core y Utilidades)
+
+    main.py: Contiene el bucle principal (while running:), el manejo de eventos (ratón, teclado), la máquina de estados del juego (MAIN_MENU, PLAYING, PAUSED, LEVEL_UP, GAME_OVER), inicializa los grupos de sprites y gestiona las colisiones (físicas entre enemigos y proyectiles).
+
+    assets.py: Centraliza TODA la carga de recursos visuales y fuentes mediante la clase GameAssets. Se instancia globalmente como core_assets después de inicializar la ventana de Pygame para evitar crasheos con .convert().
+
+    settings.py: Gestiona la lectura/escritura del archivo config.ini. Contiene el diccionario controls con los keybinds y configuraciones de UI (ej. health_bars_mode).
+
+    gamedata.py: Base de datos pura. Contiene constantes numéricas de la cuadrícula, diccionarios de estadísticas (TOWER_STATS), descripciones de UI, pesos de enemigos (ENEMY_WEIGHTS) y la distribución de oleadas (WAVE_POOLS).
+
+    graphics.py: Lógica exclusiva de renderizado de UI. Contiene funciones para recortar spritesheets (get_smart_slices), pintar botones 9-slice, barras de vida, los textos y los menús enteros (draw_main_menu, draw_pause_menu, etc.).
+
+    map_manager.py: Lógica de la cuadrícula (Grid) y Bitmasking. Calcula qué tile pintar según los vecinos y gestiona las máscaras de los muros y ruinas (update_wall_masks, update_ruin_masks).
+
+    game_logic.py: Funciones de mecánicas desligadas del bucle, como generar el pool aleatorio de recompensas (get_level_up_cards).
+
+2. Carpeta Entities/ (Sprites y Lógica in-game)
+
+    spawn.py: Contiene la clase Spawn (los portales) y funciones para calcular bordes válidos y generar enemigos basándose en el tiempo y el "population_cap".
+
+    effects.py: Clases visuales puras (Effect, TowerSmoke). Los sprites de este archivo van al effects_group y carecen de hitboxes de colisión o vida.
+
+    Entities/Player/
+
+        towers.py: Clase base Tower y subclases (ArrowTower, LaserTower, etc.). Gestionan el rango, enfriamiento, escalado con pasivas y mecánicas especiales de disparo (ej. hitscan o área). Incluye algunos efectos visuales específicos de las torres (LightningVisual).
+
+        projectiles.py: Clase base Projectile y subclases (Arrow, Fireball, Kunai). Gestionan trayectoria, velocidad, daño de área (aoe_radius) y número de perforaciones (pierce).
+
+    Entities/Enemies/
+
+        enemies.py: Clase base Enemy. Maneja navegación por grid, túneles, daño a estructuras, reducción por armadura, estados visuales (idle, walk, attack, death) y parpadeo de daño. Contiene subclases como Basic, Fast, Tank, Generator, Swarmer, Shooter y Boss. También incluye efectos ligados estrictamente a enemigos (ej. MuzzleFlashEffect).
+
+Reglas Arquitectónicas Críticas:
+
+    Separación Físicas/Visuales: NUNCA añadir efectos visuales (humo, explosiones) al enemy_group. Deben ir al effects_group y ser pasados por parámetro en los update(). El motor de físicas de main.py espera que todo lo que haya en enemy_group tenga atributos físicos (posición, radio, salud).
+
+    Carga de Assets: NUNCA hacer pygame.image.load() dentro de las clases individuales. Todos los recursos visuales deben extraerse del objeto assets instanciado en main.py o usar las variables globales que se hayan inicializado previamente.
+
+    UI Data-Driven: Los costos, daño, enfriamiento o pasivas no se escriben en duro (hardcodean) en la lógica de las torres. Se extraen cruzando el nivel de la torre/pasiva con los diccionarios de gamedata.py.
