@@ -1,0 +1,87 @@
+@font-face {
+    font-family: "Alagard";
+    src: url("alagard.ttf");
+}
+* {
+	box-sizing: border-box;
+}
+body {
+	background-image: url(landscape.png);
+	font-family: Alagard;
+	background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+	font-size: 20px;
+}
+header {
+	background-color: rgba(255,255,255,0.5);
+	width: 70%;
+	margin: 20px auto;
+}
+h1 {
+	margin: 0;
+	padding: 15px 15px 5px 15px;
+}
+nav {
+	background-color: rgba(255,255,255,0.5);
+	font-size: 24px;
+    padding: 15px 0px;
+}
+nav ul {
+	text-align: center;
+	list-style: none;
+	display: flex;
+	margin: 0;
+	padding: 0;
+}
+nav li a {
+	padding: 17px 30px;
+	text-decoration: none;
+	color: black;
+}
+nav li a:hover {
+	background-color: rgba(116, 171, 75,0.5);
+}
+main {
+	background-color: rgba(252, 234, 195,0.8);
+	width: 70%;
+	margin: auto;
+	padding: 2%;
+	border: solid 5px #951;
+	border-radius: 3rem;
+
+}
+h3, h2 {
+    margin: 20px 0px -8px 20px;
+    text-shadow: -2px 0 black, 0 2px black, 2px 0 black, 0 -2px black;
+    color: #fff;
+}
+h2 {
+    margin: 0px 0px 0px 20px;
+}
+p span {
+    font-weight: bold;
+    font-size: 20px;
+}
+
+footer {
+    background-color: rgba(0,0,0,0.8);
+    color: #fff;
+    text-align: center;
+    padding: 1px;
+    font-size: 16px;
+}
+
+table {
+    width: 100%;
+    text-align: center;
+    border-collapse: collapse;
+    border: solid 4px #951;
+}
+th {
+
+}
+td {
+    border: solid 2px #951;
+}

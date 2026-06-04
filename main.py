@@ -857,35 +857,34 @@ while running:
         restart_pressed = pygame.mouse.get_pressed()[0] and restart_rect.collidepoint(mouseX, mouseY)
         quit_pressed = pygame.mouse.get_pressed()[0] and quit_rect.collidepoint(mouseX, mouseY)
         
-        draw_action_btn(gameboard, assets, 640 - 220, 500, 200, 50, "", "Restart", is_pressed=restart_pressed)
-        draw_action_btn(gameboard, assets, 640 + 20, 500, 200, 50, "", "Menu", is_pressed=quit_pressed)
+        draw_action_btn(gameboard, assets, 640 - 220, 500, 200, 50, None, "Restart", is_pressed=restart_pressed)
+        draw_action_btn(gameboard, assets, 640 + 20, 500, 200, 50, None, "Menu", is_pressed=quit_pressed)
 
     elif game_state == "LEVEL_UP":
         card_rects = draw_level_up_menu(gameboard, assets, level_up_options, selected_card_idx, offsetX, width_gameboard)
-        
+
     elif game_state == "PAUSED":
-        pause_rects = draw_pause_menu(gameboard, assets, mouseX, mouseY)
-        
-        # --- NUEVO: MENÚ DE CONFIRMACIÓN DE REINICIO/SALIDA ---
+        # MAGIA: Si hay confirmación, el menú de pausa recibe un ratón fuera de la pantalla
+        mx, my = (-1, -1) if confirm_action else (mouseX, mouseY)
+        pause_rects = draw_pause_menu(gameboard, assets, mx, my)
+
         if confirm_action:
             dark_overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
             dark_overlay.fill((0, 0, 0, 150))
             gameboard.blit(dark_overlay, (0, 0))
-            
-            # Ribbon centrado
+
             draw_ribbon(gameboard, 640 - 150, 360 - 100, 300, 80, assets.ribbon_sheet)
             q_surf = assets.ui_font_medium.render("Are you sure?", True, "black")
             gameboard.blit(q_surf, (640 - q_surf.get_width() // 2, 360 - 75))
-            
-            # Botones Yes y No
+
             yes_rect = pygame.Rect(640 - 120, 360, 100, 50)
             no_rect = pygame.Rect(640 + 20, 360, 100, 50)
-            
+
             yes_pressed = pygame.mouse.get_pressed()[0] and yes_rect.collidepoint(mouseX, mouseY)
             no_pressed = pygame.mouse.get_pressed()[0] and no_rect.collidepoint(mouseX, mouseY)
-            
-            draw_action_btn(gameboard, assets, 640 - 120, 360, 100, 50, "", "Yes", is_pressed=yes_pressed)
-            draw_action_btn(gameboard, assets, 640 + 20, 360, 100, 50, "", "No", is_pressed=no_pressed)
+
+            draw_action_btn(gameboard, assets, 640 - 120, 360, 100, 50, None, "Yes", is_pressed=yes_pressed)
+            draw_action_btn(gameboard, assets, 640 + 20, 360, 100, 50, None, "No", is_pressed=no_pressed)
             
     elif game_state == "MAIN_MENU":
         main_menu_rects = draw_main_menu(gameboard, assets, mouseX, mouseY)

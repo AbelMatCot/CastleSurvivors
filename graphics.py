@@ -267,6 +267,9 @@ def draw_action_btn(surface, assets, x, y, w, h, key_text, label, cost=None, is_
     pygame.draw.rect(surface, "#3b2f2f", (x - 10, y - 10 + y_off, 26, 26), border_radius=4)
     pygame.draw.rect(surface, "#d2b48c", (x - 10, y - 10 + y_off, 26, 26), 2, border_radius=4)
 
+    if key_text:
+        pass
+
     if assets.keys_sheet:
         k = key_text.lower()
         col_idx, row_idx = KEYMAP_COORDS.get(k, (7, 6))

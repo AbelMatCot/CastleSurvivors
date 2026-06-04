@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <meta charset="utf-8">
+        <title>Castle Survivors</title>
+   		<link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <header>
+			<h1>Castle Survivors</h1>
+			<nav>
+				<ul>
+					<li><a href="index.html">Play now</a></li>
+					<li><a href="towers.html">Towers</a></li>
+					<li><a href="feedback.html">Feedback</a></li>
+				</ul>
+			</nav>
+		</header>
+        <main>
+            <h3>Please, give me your opinion to keep improving the game!</h3>
+            <br>
+            <form action="https://formtester.goodbytes.be/post.php" target="_blank" method="post">
+                <fieldset>
+                    <legend>How fun was playing Castle Survivors?</legend>
+                    <label><input type="radio" name="diversion" value="1" required> 1</label>
+                    <label><input type="radio" name="diversion" value="2"> 2</label>
+                    <label><input type="radio" name="diversion" value="3"> 3</label>
+                    <label><input type="radio" name="diversion" value="4"> 4</label>
+                    <label><input type="radio" name="diversion" value="5"> 5</label>
+                </fieldset>
+                <br>
+
+                <fieldset>
+                    <legend>How balanced or fair was the match?</legend>
+                    <label><input type="radio" name="balance" value="1" required> 1</label>
+                    <label><input type="radio" name="balance" value="2"> 2</label>
+                    <label><input type="radio" name="balance" value="3"> 3</label>
+                    <label><input type="radio" name="balance" value="4"> 4</label>
+                    <label><input type="radio" name="balance" value="5"> 5</label>
+                </fieldset>
+                <br>
+
+                <label for="parte_ajustar">Which part do you think needs adjustment?</label><br>
+                <input list="opciones_ajuste" id="parte_ajustar" name="parte_ajustar">
+                <datalist id="opciones_ajuste">
+                    <option value="Towers"></option>
+                    <option value="Enemies"></option>
+                    <option value="Passive upgrades"></option>
+                    <option value="Meta-progression"></option>
+                </datalist>
+                <br><br>
+
+                <label for="detalles_mejora">What exactly would you improve about that part?</label><br>
+                <input type="text" id="detalles_mejora" name="detalles_mejora" size="40">
+                <br><br>
+
+                <label for="otras_sugerencias">Other suggestions:</label><br>
+                <textarea id="otras_sugerencias" name="otras_sugerencias" rows="4" cols="40"></textarea>
+                <br><br>
+
+                <button type="submit">Submit Feedback</button>
+            </form>
+        </main>
+    </body>
+</html>

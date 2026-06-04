@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+	<head>
+		<meta charset="utf-8">
+		<title>Castle Survivors</title>
+		<link rel="stylesheet" href="style.css">
+	</head>
+	<body>
+		<header>
+			<h1>Castle Survivors</h1>
+			<nav>
+				<ul>
+					<li><a href="index.html">Play now</a></li>
+					<li><a href="towers.html">Towers</a></li>
+					<li><a href="feedback.html">Feedback</a></li>
+				</ul>
+			</nav>
+		</header>
+
+		<main>
+			<h2>Tower Stats</h2>
+			<label for="select_tower">Elige una torre: </label>
+			<select id="select_tower">
+				<option value="archers">Archers</option>
+				<option value="fireball">Fireball</option>
+			</select>
+
+			<br><br>
+
+			<table>
+				<thead>
+					<tr>
+						<th>Level</th>
+						<th>Cost</th>
+						<th>Limit</th>
+						<th>Range</th>
+						<th>Damage</th>
+						<th>Firerate(s)</th>
+						<th>DPS</th>
+						<th>HP</th>
+						<th id="stat_especial"></th>
+					</tr>
+				</thead>
+				<tbody id="tbody">
+					</tbody>
+			</table>
+		</main>
+
+		<script>
+			const datos = {
+
+			};
+
+			const select = document.getElementById("select_tower");
+			const tbody = document.getElementById("tbody");
+			const stat_especial = document.getElementById("stat_especial");
+
+			function generar_tabla() {
+
+				if (select.value === "archers") {
+					stat_especial.textContent = "HP";
+				} else if (select.value === "fireball") {
+					stat_especial.textContent = "N/A";
+				}
+
+				const data = datos[select.value];
+
+				tbody.innerHTML = "";
+
+				for (let i = 0; i < data.length; i++) {
+					const fila = data[i];
+					let rows = "<tr>";
+
+					for (let j = 0; j < fila.length; j++) {
+						rows += "<td>" + fila[j] + "</td>";
+					}
+
+					rows += "</tr>";
+
+					// Lo inyectamos en la tabla
+					tbody.innerHTML += rows;
+				}
+			}
+
+			select.addEventListener("change", generar_tabla);
+			generar_tabla();
+		</script>
+	</body>
+</html>
