@@ -653,9 +653,8 @@ class Shooter(Enemy):
 
 class Boss(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=200, speed=15, color="magenta", radius=28, xp_value=0, gold_value=0, base_damage=40)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=100, speed=15, color="magenta", radius=28, xp_value=0, gold_value=0, base_damage=35)
 
-        # ¡CLAVE! Lo dejamos vacío para ANULAR el daño y ataques de la clase Enemy genérica
         self.target_cells = ()
         self.attack_cooldown = 1.8
         self.range = 75

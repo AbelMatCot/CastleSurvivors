@@ -4,3 +4,5 @@ summary.txt
 build/
 __pycache__/
 .idea/
+
+# pygbag --disable-sound-format-error .
