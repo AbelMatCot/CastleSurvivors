@@ -102,7 +102,7 @@ WAVE_POOLS = {
     5: {"Basic": 50, "Fast": 30, "Flyer": 20},
     8: {"Basic": 40, "Fast": 20, "Flyer": 20, "Tank": 20},
     12: {"Basic": 30, "Fast": 15, "Flyer": 20, "Tank": 20, "Shooter": 15},
-    14: {"Basic": 20, "Fast": 15, "Flyer": 15, "Tank": 25, "Shooter": 15, "Generator": 10}
+    14: {"Basic": 20, "Fast": 15, "Flyer": 15, "Tank": 25, "Shooter": 15, "Generator": 10},
     17: {"Basic": 20, "Fast": 15, "Flyer": 20, "Tank": 30, "Shooter": 10, "Generator": 5}
 }
 
