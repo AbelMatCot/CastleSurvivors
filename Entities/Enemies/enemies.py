@@ -547,7 +547,7 @@ class Shooter(Enemy):
         super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=12, speed=30.0,
                          color="cyan", radius=8, xp_value=4, gold_value=3, base_damage=10)
 
-        self.range = 75
+        self.range = 60
         self.attack_cooldown = 1.2
         self.shot_castle = 0
         self.target_cells = ()
