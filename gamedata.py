@@ -99,10 +99,11 @@ ENEMY_WEIGHTS = {
 WAVE_POOLS = {
     0: {"Basic": 100},
     2: {"Basic": 70, "Fast": 30},
-    5: {"Basic": 50, "Fast": 30, "Shooter": 20},
-    8: {"Basic": 40, "Fast": 20, "Shooter": 20, "Tank": 20},
-    12: {"Basic": 30, "Fast": 15, "Shooter": 20, "Tank": 20, "Flyer": 15},
-    15: {"Basic": 20, "Fast": 15, "Shooter": 15, "Tank": 25, "Flyer": 15, "Generator": 10}
+    5: {"Basic": 50, "Fast": 30, "Flyer": 20},
+    8: {"Basic": 40, "Fast": 20, "Flyer": 20, "Tank": 20},
+    12: {"Basic": 30, "Fast": 15, "Flyer": 20, "Tank": 20, "Shooter": 15},
+    14: {"Basic": 20, "Fast": 15, "Flyer": 15, "Tank": 25, "Shooter": 15, "Generator": 10}
+    17: {"Basic": 20, "Fast": 15, "Flyer": 20, "Tank": 30, "Shooter": 10, "Generator": 5}
 }
 
 # =====================================================================
