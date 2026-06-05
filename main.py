@@ -1005,8 +1005,8 @@ async def main():
                 update_neighbors_walls(r, c, grid, wall_masks, ruin_masks)
 
             for enemy in enemy_group:
-                # IGNORAMOS AL BOSS: Solo los masillas hacen daño de contacto
-                if type(enemy).__name__ != "Boss":
+                #No hacen daño por contacto
+                if type(enemy).__name__ not in  ["Boss", "Shooter"]:
                     dist = enemy.pos.distance_to(pygame.math.Vector2(castle_obj.rect.center))
                     if dist < (enemy.radius + 40):
                         if not hasattr(enemy, "castle_attack_timer"):
