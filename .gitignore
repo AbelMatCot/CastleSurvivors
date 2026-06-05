@@ -1,3 +1,6 @@
-.venv
+.venv/
 roadmap.txt
 summary.txt
+build/
+__pycache__/
+.idea/
