@@ -225,7 +225,8 @@ def draw_ribbon(surface, x, y, w, h, sheet, rw=0, rows_total=2):
 
     surface.blit(pygame.transform.scale(right, (edge_w_r, h)), (x + edge_w_l + mid_w, y))
 
-def draw_slot(surface, assets, x, y, size, key_text, cost=None, is_pressed=False, t_id=None):
+# Fíjate en el nuevo parámetro al final
+def draw_slot(surface, assets, x, y, size, key_text, cost=None, is_pressed=False, t_id=None, show_ribbon=True):
     img = assets.btn_small_pressed_img if is_pressed else assets.btn_small_img
     btn_y = y + 4 if is_pressed else y
     btn_h = size - 4 if is_pressed else size
@@ -252,10 +253,11 @@ def draw_slot(surface, assets, x, y, size, key_text, cost=None, is_pressed=False
         key_surf = assets.ui_font_small.render(key_text.upper(), True, "white")
         surface.blit(key_surf, (x - 1, y - 5 + y_off))
 
-    draw_ribbon(surface, x - 5, y + size + 2, 60, 25, assets.ribbon_sheet, rw=1)
-    if cost is not None:
-        cost_surf = assets.ui_font_small.render(f"{cost} G", True, "black")
-        surface.blit(cost_surf, (x + 25 - cost_surf.get_width() // 2, y + size + 7))
+    if show_ribbon:
+        draw_ribbon(surface, x - 5, y + size + 2, 60, 25, assets.ribbon_sheet, rw=1)
+        if cost is not None:
+            cost_surf = assets.ui_font_small.render(f"{cost} G", True, "black")
+            surface.blit(cost_surf, (x + 25 - cost_surf.get_width() // 2, y + size + 7))
 
 def draw_action_btn(surface, assets, x, y, w, h, key_text, label, cost=None, is_pressed=False):
     img = assets.btn_wide_pressed_img if is_pressed else assets.btn_wide_img

@@ -194,10 +194,24 @@ async def main():
 
     while running:
         keys = pygame.key.get_pressed()
+
+        physical_mouseX, physical_mouseY = pygame.mouse.get_pos()
+        current_w, current_h = screen.get_size()
+        mouseX = int((physical_mouseX / max(1, current_w)) * 1280)
+        mouseY = int((physical_mouseY / max(1, current_h)) * 720)
+
+        # --- LÓGICA DE VELOCIDAD DE TIEMPO (TECLADO + RATÓN) ---
+        btn_speed_z = pygame.Rect(65, 520, 50, 50)
+        btn_speed_x = pygame.Rect(165, 520, 50, 50)
+        mouse_clicked = pygame.mouse.get_pressed()[0]
+
+        is_z_pressed = keys[pygame.K_z] or (btn_speed_z.collidepoint(mouseX, mouseY) and mouse_clicked)
+        is_x_pressed = keys[pygame.K_x] or (btn_speed_x.collidepoint(mouseX, mouseY) and mouse_clicked)
+
         time_scale = 1.0
-        if keys[pygame.K_x]:
+        if is_x_pressed:
             time_scale = 8.0
-        elif keys[pygame.K_z]:
+        elif is_z_pressed:
             time_scale = 4.0
 
 
@@ -800,6 +814,10 @@ async def main():
                 pygame.mouse.get_pressed()[0] and menu_btn_rect.collidepoint(mouseX, mouseY))
         draw_action_btn(gameboard, assets, 40, 600, 200, 50, "esc", "Menu", is_pressed=is_menu_pressed)
 
+        # --- BOTONES DE ACELERAR TIEMPO ---
+        draw_slot(gameboard, assets, 65, 520, 50, "z", cost=None, is_pressed=is_z_pressed, t_id="speed_z", show_ribbon=False)
+        draw_slot(gameboard, assets, 165, 520, 50, "x", cost=None, is_pressed=is_x_pressed, t_id="speed_x", show_ribbon=False)
+
         rx = 1000
         for i in range(4):
             slot_x = rx + 25 + (i * 60)
@@ -902,8 +920,12 @@ async def main():
         if assets.cursor_img:
             gameboard.blit(assets.cursor_img, (mouseX, mouseY))
 
+        # --- ESCALADO OPTIMIZADO PARA NAVEGADOR ---
         screensize = screen.get_size()
-        rescaled_gameboard = pygame.transform.scale(gameboard, screensize)
+
+        # Smoothscale directo: buen rendimiento en web y sin píxeles amorfos
+        rescaled_gameboard = pygame.transform.smoothscale(gameboard, screensize)
+
         screen.blit(rescaled_gameboard, (0, 0))
 
         pygame.display.flip()
@@ -913,7 +935,7 @@ async def main():
         if game_state == "PLAYING":
             game_time += dt * time_scale
             current_minute = int(game_time // 60)
-            difficulty_multiplier = round(1 + (current_minute / 8) ** 1.8, 2)
+            difficulty_multiplier = round(1 + (current_minute / 10) ** 1.5, 2)
 
             regen_lvl = passive_levels.get("regen", 0)
             if regen_lvl > 0:

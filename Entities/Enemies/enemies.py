@@ -653,7 +653,7 @@ class Shooter(Enemy):
 
 class Boss(Enemy):
     def __init__(self, pixel_x, pixel_y, grid_size, offset_x):
-        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=100, speed=15, color="magenta", radius=28, xp_value=0, gold_value=0, base_damage=35)
+        super().__init__(pixel_x, pixel_y, grid_size, offset_x, health=150, speed=15, color="magenta", radius=28, xp_value=0, gold_value=0, base_damage=35)
 
         self.target_cells = ()
         self.attack_cooldown = 1.8
@@ -691,7 +691,7 @@ class Boss(Enemy):
         if getattr(self, "is_dying", False):
             super().update(dt, grid, enemy_group, effects_group, structures_hp, passive_levels, thorns_values)
             self.rect = self.image.get_rect()
-            self.rect.midbottom = (round(self.pos.x), round(self.pos.y) + self.radius)
+            self.rect.center = (round(self.pos.x), round(self.pos.y) - 10)
             return
 
         target_pos = None
@@ -791,4 +791,4 @@ class Boss(Enemy):
             self.has_hit_this_cycle = False
 
         self.rect = self.image.get_rect()
-        self.rect.midbottom = (round(self.pos.x), round(self.pos.y) + self.radius)
+        self.rect.center = (round(self.pos.x), round(self.pos.y) - 10)

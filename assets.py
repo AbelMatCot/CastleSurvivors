@@ -138,6 +138,9 @@ class GameAssets:
             self.small_bar_base = pygame.image.load(os.path.join(ui_path, "SmallBar_Base.png")).convert_alpha()
             self.small_bar_fill = pygame.image.load(os.path.join(ui_path, "SmallBar_Fill.png")).convert_alpha()
             self.big_ribbon_sheet = pygame.image.load(os.path.join(ui_path, "BigRibbons.png")).convert_alpha()
+            speedup_sheet = pygame.image.load(os.path.join(ui_path, "speedup.png")).convert_alpha()
+            self.ui_tower_icons["speed_z"] = pygame.transform.scale(speedup_sheet.subsurface((0, 0, 32, 32)), (26, 26))
+            self.ui_tower_icons["speed_x"] = pygame.transform.scale(speedup_sheet.subsurface((32, 0, 32, 32)), (26, 26))
         except FileNotFoundError as e:
             print(f"UI ERROR: Image {e} not found.")
             pygame.quit()
@@ -177,5 +180,21 @@ class GameAssets:
         except FileNotFoundError:
             self.bg_menu = pygame.Surface((1280, 720))
             self.bg_menu.fill("#222222")
+
+            # --- BOTONES DE VELOCIDAD ---
+            try:
+                speed_sheet = pygame.image.load(os.path.join("Assets", "UI", "speedup.png")).convert_alpha()
+
+                icon_z = pygame.Surface((32, 32), pygame.SRCALPHA)
+                icon_z.blit(speed_sheet, (0, 0), (0, 0, 32, 32))
+
+                icon_x = pygame.Surface((32, 32), pygame.SRCALPHA)
+                icon_x.blit(speed_sheet, (0, 0), (32, 0, 32, 32))
+
+                # Los metemos en el diccionario de torres para engañar a draw_slot
+                self.ui_tower_icons["speed_z"] = pygame.transform.scale(icon_z, (28, 28))
+                self.ui_tower_icons["speed_x"] = pygame.transform.scale(icon_x, (28, 28))
+            except FileNotFoundError:
+                print("Warning: speedup.png not found.")
 
 core_assets = GameAssets()
