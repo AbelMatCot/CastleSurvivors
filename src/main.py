@@ -2,7 +2,6 @@ import pygame
 import random
 import os
 import sys
-import ctypes
 import asyncio
 
 from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, LightningTower, ThornsTower, TOWER_STATS
@@ -597,6 +596,9 @@ async def main():
                 elif game_state == "PAUSED":
                     if event.key == pygame.K_ESCAPE:
                         game_state = "PLAYING"
+                elif game_state == "CASTLE_SELECT":
+                    if event.key == pygame.K_ESCAPE:
+                        game_state = "MAIN_MENU"
 
         gameboard.fill("#222222")
         pygame.draw.rect(gameboard, "#000000", (offsetX, 0, width_gameboard, height_gameboard))

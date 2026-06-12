@@ -1,4 +1,9 @@
-todo animacion de muerte del generator es muy lenta. Bug animacion al generar quieto
+pygbag src
+
+
+## arreglado? todo animacion de muerte del generator es muy lenta. Bug animacion al generar quieto
+
+todo bug visual monedas del cofre muy altas, hay que bajarlas un poco.
 
 todo repair all
 todo cooldown de reparar
