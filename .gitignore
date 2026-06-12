@@ -1,14 +1,11 @@
 .venv/
 roadmap.txt
 summary.txt
+config.ini
 build/
 __pycache__/
 .idea/
-*.apk
-*.tar.gz
 __pycache__/
 *.pyc
 .DS_Store
-
-
-# pygbag --disable-sound-format-error .
+build
