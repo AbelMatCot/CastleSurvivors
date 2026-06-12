@@ -73,11 +73,26 @@ def draw_text_wrapped(surface, text, font, color, rect):
     if current_line:
         lines.append(" ".join(current_line))
 
-    y_offset = rect.y
+    line_height = font.get_linesize()
+    total_height = line_height * len(lines)
+    temp_surf = pygame.Surface((rect.width, max(total_height, 1)), pygame.SRCALPHA)
+
+    y_offset = 0
     for line in lines:
-        surf = font.render(line, True, color)
-        surface.blit(surf, (rect.x, y_offset))
-        y_offset += font.get_linesize()
+        # ¡MAGIA AQUÍ! El 'False' apaga el difuminado. Pixel art perfecto.
+        line_surf = font.render(line, False, color)
+        temp_surf.blit(line_surf, (0, y_offset))
+        y_offset += line_height
+
+    if total_height > rect.height:
+        scale = rect.height / total_height
+        new_w = int(rect.width * scale)
+        new_h = rect.height
+        # Usamos scale normal, nada de smoothscale
+        fitted_surf = pygame.transform.scale(temp_surf, (max(1, new_w), max(1, new_h)))
+        surface.blit(fitted_surf, (rect.x + (rect.width - new_w) // 2, rect.y))
+    else:
+        surface.blit(temp_surf, (rect.x, rect.y))
 
 def draw_9_slice_button(surface, image, rect, edge_px=8):
     w, h = image.get_size()
@@ -226,7 +241,7 @@ def draw_ribbon(surface, x, y, w, h, sheet, rw=0, rows_total=2):
     surface.blit(pygame.transform.scale(right, (edge_w_r, h)), (x + edge_w_l + mid_w, y))
 
 # Fíjate en el nuevo parámetro al final
-def draw_slot(surface, assets, x, y, size, key_text, cost=None, is_pressed=False, t_id=None, show_ribbon=True):
+def draw_slot(surface, assets, x, y, size, key_text, cost=None, is_pressed=False, t_id=None, show_ribbon=True, tier_lvl=None):
     img = assets.btn_small_pressed_img if is_pressed else assets.btn_small_img
     btn_y = y + 4 if is_pressed else y
     btn_h = size - 4 if is_pressed else size
@@ -252,6 +267,17 @@ def draw_slot(surface, assets, x, y, size, key_text, cost=None, is_pressed=False
     else:
         key_surf = assets.ui_font_small.render(key_text.upper(), True, "white")
         surface.blit(key_surf, (x - 1, y - 5 + y_off))
+
+        # --- NUEVO: BANDERÍN DE NIVEL (Debajo de la tecla) ---
+    if tier_lvl is not None and assets.tierframe and assets.tiers_sheet:
+        bx = x - 5
+        by = y + 14 + y_off
+        surface.blit(assets.tierframe, (bx, by))
+
+        # Calculamos la posición en la sheet y lo pegamos a x0 y3 del banderín
+        tier_idx = min(7, max(0, tier_lvl - 1))
+        t_col, t_row = tier_idx % 4, tier_idx // 4
+        surface.blit(assets.tiers_sheet, (bx, by + 3), (t_col * 16, t_row * 16, 16, 16))
 
     if show_ribbon:
         draw_ribbon(surface, x - 5, y + size + 2, 60, 25, assets.ribbon_sheet, rw=1)
@@ -311,41 +337,123 @@ def draw_game_over_menu(surface, assets, current_minute, game_time):
 
 
 def draw_level_up_menu(surface, assets, level_up_options, selected_card_idx, offsetX, width_gameboard):
+
     overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
     overlay.fill((0, 0, 0, 200))
     surface.blit(overlay, (0, 0))
 
-    card_width = 220
-    card_height = 300
-    spacing = 40
-    start_x = offsetX + (width_gameboard - (card_width * 3 + spacing * 2)) // 2
-    start_y = 200
+    # Escalamos el arte de 100x140 x2 exacto para mantener pixel-perfect
+    card_width = 200
+    card_height = 280
+    spacing = 30
+
+    cols = 3
+    rows = (len(level_up_options) + cols - 1) // cols
+
+    # Subimos el inicio si hay más de una fila
+    start_y = 40 if rows > 1 else 200
 
     card_rects = []
-    title_text = assets.ui_font_large.render("LEVEL UP! CHOOSE A REWARD", True, "yellow")
-    surface.blit(title_text, (640 - title_text.get_width() // 2, 100))
+    is_castle_select = len(level_up_options) > 0 and level_up_options[
+        0].get("type") in ["arrow", "fireball", "lightning", "kunai", "laser", "thorns"]
+
+    if is_castle_select:
+        title_text = assets.ui_font_large.render("CHOOSE YOUR CASTLE", True, "yellow")
+        surface.blit(title_text, (640 - title_text.get_width() // 2, 10))
+    else:
+        title_text = assets.ui_font_large.render("LEVEL UP! CHOOSE A REWARD", True, "yellow")
+        surface.blit(title_text, (640 - title_text.get_width() // 2, 100))
 
     for i, card in enumerate(level_up_options):
-        cx = start_x + i * (card_width + spacing)
-        cy = start_y
+        r = i // cols
+        c = i % cols
+
+        # Centramos la fila actual dinámicamente
+        cards_in_this_row = len(level_up_options) - r * cols if (r == rows - 1) else cols
+        row_w = cards_in_this_row * card_width + (cards_in_this_row - 1) * spacing
+        cx = offsetX + (width_gameboard - row_w) // 2 + c * (card_width + spacing)
+        cy = start_y + r * (card_height + 25)
+
         rect = pygame.Rect(cx, cy, card_width, card_height)
         card_rects.append(rect)
 
-        pygame.draw.rect(surface, "#112233", rect)
-        if selected_card_idx == i:
-            pygame.draw.rect(surface, "white", rect, 5)
+        # 1. Construimos la tarjeta a su resolución nativa de pixel art (100x140)
+        base_card = pygame.Surface((100, 140), pygame.SRCALPHA)
+        if assets.lvlcard:
+            base_card.blit(assets.lvlcard, (0, 0))
         else:
-            pygame.draw.rect(surface, "#445566", rect, 2)
+            base_card.fill("#112233")  # Fallback por si la lías con las rutas
 
-        text_surf = assets.ui_font_medium.render(card["title"], True, "white")
-        surface.blit(text_surf, (cx + 10, cy + 20))
+        c_type = card.get("type", "")
+        c_id = card.get("id", c_type)  # En castle_select 'type' es la torre directamente
 
+        # Leemos el nivel directamente de la lógica
+        lvl = card.get("lvl", 1)
+
+        # 2. Iconos centrales
+        if c_type == "upgrade_tower" or is_castle_select:
+            if c_id in assets.raw_tower_icons:
+                base_card.blit(assets.raw_tower_icons[c_id], (35, 12))
+        elif c_type in ["unlock_passive", "upgrade_passive"]:
+            if c_id in assets.stat_icons:
+                base_card.blit(assets.stat_icons[c_id], (34, 18))
+        # Recompensas planas de nivel > 50 que reutilizan iconos de stats
+        elif c_type == "heal":
+            if "heal" in assets.stat_icons: base_card.blit(assets.stat_icons["heal"], (34, 18))
+        elif c_type == "gold_100":
+            if "gold_100" in assets.stat_icons: base_card.blit(assets.stat_icons["gold_100"], (34, 18))
+        elif c_type == "gems_5":
+            if "gems" in assets.stat_icons: base_card.blit(assets.stat_icons["gems"], (34, 18))
+
+        # 3. Tiers (Sprite sheet de 4 columnas x 2 filas)
+        if assets.tiers_sheet:
+            tier_idx = min(7, max(0, lvl - 1))
+            t_col, t_row = tier_idx % 4, tier_idx // 4
+            base_card.blit(assets.tiers_sheet, (6, 17), (t_col * 16, t_row * 16, 16, 16))
+
+        # 4. Marco superior embellecedor
+        if assets.cardframe:
+            base_card.blit(assets.cardframe, (0, 0))
+
+        # 5. Escalar x2
+        scaled_card = pygame.transform.scale(base_card, (card_width, card_height))
+
+        # Bordecito de selección inteligente (Silueta perfecta)
+        if selected_card_idx == i:
+            mask = pygame.mask.from_surface(scaled_card)
+            mask_surf = mask.to_surface(setcolor=(255, 255, 255, 255), unsetcolor=(0, 0, 0, 0))
+
+            # Dibujamos la silueta blanca desplazada para crear el contorno
+            grosor = 3
+            for dx in [-grosor, 0, grosor]:
+                for dy in [-grosor, 0, grosor]:
+                    if dx != 0 or dy != 0:
+                        surface.blit(mask_surf, (cx + dx, cy + dy))
+
+        # 5.5 Pintar la carta real ENCIMA del borde blanco
+        surface.blit(scaled_card, (cx, cy))
+
+        # 6. Textos nítidos SOBRE el escalado
+        title_str = card.get("title", "")
+
+        # ¡FALSO al Anti-Aliasing para que las letras no engorden!
+        t_surf = assets.ui_font_small.render(title_str, False, "white")
+        t_shadow = assets.ui_font_small.render(title_str, False, "black")
+
+        # Hemos quitado la basura de re-escalar. Dejamos el texto a su tamaño puro.
+        # Y subimos la Y a 128 para que quede centrado de lujo.
+        tx = cx + 100 - (t_surf.get_width() // 2)
+        ty = cy + 128 - (t_surf.get_height() // 2)
+
+        surface.blit(t_shadow, (tx + 1, ty + 1))
+        surface.blit(t_surf, (tx, ty))
+
+        # Descripción envuelta
         if "desc" in card:
-            desc_rect = pygame.Rect(cx + 10, cy + 60, card_width - 20, card_height - 80)
-            draw_text_wrapped(surface, card["desc"], assets.ui_font_small, "lightgray", desc_rect)
+            desc_rect = pygame.Rect(cx + 38, cy + 152, 122, 80)
+            draw_text_wrapped(surface, card["desc"], assets.ui_font_small, "#2b2b2b", desc_rect)
 
     return card_rects
-
 
 def draw_pause_menu(surface, assets, mouseX, mouseY):
     overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
@@ -376,17 +484,18 @@ def draw_pause_menu(surface, assets, mouseX, mouseY):
     return pause_rects
 
 
-def draw_main_menu(surface, assets, mouseX, mouseY):
+def draw_main_menu(surface, assets, mouseX, mouseY, offset_y=0):
+
     surface.blit(assets.bg_menu, (0, 0))
-    draw_ribbon(surface, 640 - 250, 100, 500, 100, assets.big_ribbon_sheet, rw=1, rows_total=5)
+    draw_ribbon(surface, 640 - 250, 100 + offset_y, 500, 100, assets.big_ribbon_sheet, rw=1, rows_total=5)
 
     title_text = assets.ui_font_large.render("CASTLE SURVIVORS", True, (255, 235, 0))
-    surface.blit(title_text, (640 - title_text.get_width() // 2, 130))
+    surface.blit(title_text, (640 - title_text.get_width() // 2, 130 + offset_y))
 
     menu_opts = ["Play", "Upgrades", "Settings", "Exit"]
     main_menu_rects = []
     for i, opt in enumerate(menu_opts):
-        btn_y = 280 + i * 80
+        btn_y = 280 + i * 80 + offset_y
         btn_rect = pygame.Rect(640 - 100, btn_y, 200, 60)
         main_menu_rects.append((btn_rect, opt))
 

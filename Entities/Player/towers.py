@@ -1,6 +1,7 @@
 import pygame
 import math
 import os
+import random
 from Entities.Player.projectiles import Arrow, Fireball, Kunai
 
 try:
@@ -9,7 +10,7 @@ except FileNotFoundError:
     lightning_sheet = None
 
 try:
-    thorns_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "thorns.png"))
+    thorns_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "spikes.png"))
 except FileNotFoundError:
     thorns_sheet = None
 
@@ -66,14 +67,14 @@ TOWER_STATS = {
         8: {"cost": 354, "limit": 5, "range": 100, "damage": 20, "cd": 0.5, "proj": 1, "bounces": 5, "pierce": 1},
     },
     "thorns": {
-        1: {"cost": 27, "limit": 2, "range": 70, "damage": 3, "cd": 2.0, "proj": 1, "area": 15, "pierce": 5},
-        2: {"cost": 31, "limit": 2, "range": 70, "damage": 5, "cd": 2.0, "proj": 1, "area": 15, "pierce": 5},
-        3: {"cost": 41, "limit": 2, "range": 70, "damage": 5, "cd": 1.8, "proj": 1, "area": 15, "pierce": 5},
-        4: {"cost": 59, "limit": 3, "range": 70, "damage": 8, "cd": 1.8, "proj": 1, "area": 15, "pierce": 5},
-        5: {"cost": 83, "limit": 3, "range": 80, "damage": 8, "cd": 1.8, "proj": 1, "area": 20, "pierce": 5},
-        6: {"cost": 115, "limit": 3, "range": 80, "damage": 8, "cd": 1.5, "proj": 1, "area": 20, "pierce": 5},
-        7: {"cost": 153, "limit": 4, "range": 80, "damage": 8, "cd": 1.5, "proj": 1, "area": 20, "pierce": 5},
-        8: {"cost": 397, "limit": 4, "range": 100, "damage": 11, "cd": 1.2, "proj": 1, "area": 30, "pierce": 5},
+        1: {"cost": 27, "limit": 2, "range": 70, "damage": 4, "cd": 2.0, "proj": 1, "area": 20, "pierce": 5},
+        2: {"cost": 31, "limit": 2, "range": 70, "damage": 7, "cd": 2.0, "proj": 1, "area": 20, "pierce": 5},
+        3: {"cost": 41, "limit": 2, "range": 70, "damage": 7, "cd": 1.8, "proj": 1, "area": 20, "pierce": 5},
+        4: {"cost": 59, "limit": 3, "range": 70, "damage": 10, "cd": 1.8, "proj": 1, "area": 20, "pierce": 5},
+        5: {"cost": 83, "limit": 3, "range": 80, "damage": 10, "cd": 1.8, "proj": 1, "area": 25, "pierce": 5},
+        6: {"cost": 115, "limit": 3, "range": 80, "damage": 10, "cd": 1.5, "proj": 1, "area": 25, "pierce": 5},
+        7: {"cost": 153, "limit": 4, "range": 80, "damage": 10, "cd": 1.5, "proj": 1, "area": 25, "pierce": 5},
+        8: {"cost": 397, "limit": 4, "range": 100, "damage": 14, "cd": 1.2, "proj": 1, "area": 30, "pierce": 5},
     },
 }
 
@@ -147,6 +148,7 @@ class IceBeamVisual(pygame.sprite.Sprite):
         if self.timer >= 0.2:  # Desaparece rápido
             self.kill()
 
+
 class ThornsArea(pygame.sprite.Sprite):
     def __init__(self, x, y, stats, enemy_group):
         super().__init__()
@@ -155,73 +157,86 @@ class ThornsArea(pygame.sprite.Sprite):
         self.radius = stats.get("area", 25)
         self.max_size = int(self.radius * 2)
 
-        self.frames = []
+        self.frames_var1 = []
+        self.frames_var2 = []
+
         if thorns_sheet:
-            h = thorns_sheet.get_height()
-            w = thorns_sheet.get_width()
-            num_frames = min(2, w // h)
-            for i in range(num_frames):
-                frame = pygame.Surface((h, h), pygame.SRCALPHA)
-                frame.blit(thorns_sheet, (0, 0), (i * h, 0, h, h))
-                self.frames.append(frame)
+            frame_size = 32
+            scale_mult = max(1, round(self.max_size / frame_size))
+            final_size = frame_size * scale_mult
+
+            for i in range(7):
+                # Fila 0 (Variación 1 - Arriba)
+                f1 = pygame.Surface((frame_size, frame_size), pygame.SRCALPHA)
+                f1.blit(thorns_sheet, (0, 0), (i * frame_size, 0, frame_size, frame_size))
+                self.frames_var1.append(pygame.transform.scale(f1, (final_size, final_size)))
+
+                # Fila 1 (Variación 2 - Abajo)
+                f2 = pygame.Surface((frame_size, frame_size), pygame.SRCALPHA)
+                f2.blit(thorns_sheet, (0, 0), (i * frame_size, frame_size, frame_size, frame_size))
+                self.frames_var2.append(pygame.transform.scale(f2, (final_size, final_size)))
         else:
-            surf = pygame.Surface((10, 10))
-            surf.fill("darkgreen")
-            self.frames.append(surf)
+            for _ in range(7):
+                surf = pygame.Surface((self.max_size, self.max_size), pygame.SRCALPHA)
+                surf.fill((0, 100, 0, 100))
+                self.frames_var1.append(surf)
+                self.frames_var2.append(surf)
 
         self.life_timer = 0.0
         self.total_life = 1.5
         self.tick_timer = 0.5
-        self.pulse_duration = 0.0
 
-        self.image = pygame.Surface((0, 0))
+        self.anim_timer = 0.0
+        self.current_frame = 0
+        self.ending = False
+
+        # Empezamos con una variación aleatoria
+        self.active_frames = random.choice([self.frames_var1, self.frames_var2])
+
+        self.image = self.active_frames[0]
         self.rect = self.image.get_rect(center=(x, y))
         self.x = x
         self.y = y
 
     def update(self, dt):
+        # 1. Animación visual
+        self.anim_timer += dt
+        if self.anim_timer >= 0.06:
+            self.anim_timer = 0.0
+            self.current_frame += 1
+
+            if self.current_frame >= len(self.active_frames):
+                if self.ending:
+                    self.kill()
+                    return
+                else:
+                    self.current_frame = 0
+                    # ¡MAGIA AQUÍ! Al terminar el ciclo, elegimos variación nueva
+                    self.active_frames = random.choice([self.frames_var1, self.frames_var2])
+
+        self.image = self.active_frames[self.current_frame]
+
+        # 2. Control de tiempo de vida
         self.life_timer += dt
         if self.life_timer >= self.total_life:
-            self.kill()
-            return
+            self.ending = True
 
-        self.tick_timer += dt
-        if self.tick_timer >= 0.5:
-            self.tick_timer -= 0.5
-            self.pulse_duration = 0.15
+        # 3. Lógica de daño
+        if not self.ending:
+            self.tick_timer += dt
+            if self.tick_timer >= 0.5:
+                self.tick_timer -= 0.5
 
-            hit_count = 0
-            max_hits = self.stats.get("pierce", 4)
-            damage = self.stats.get("damage", 3)
+                hit_count = 0
+                max_hits = self.stats.get("pierce", 4)
+                damage = self.stats.get("damage", 3)
 
-            for e in self.enemy_group:
-                if e.alive() and pygame.math.Vector2(self.x, self.y).distance_to(e.pos) <= self.radius:
-                    e.take_damage(damage)
-                    hit_count += 1
-                    if hit_count >= max_hits:
-                        break
-
-        if self.pulse_duration > 0:
-            self.pulse_duration -= dt
-            frame_idx = 1 if len(self.frames) > 1 else 0
-        else:
-            frame_idx = 0
-
-        base_frame = self.frames[frame_idx]
-
-        grow_time = 0.2
-        shrink_time = 0.2
-        if self.life_timer < grow_time:
-            scale_factor = self.life_timer / grow_time
-        elif self.life_timer > self.total_life - shrink_time:
-            scale_factor = (self.total_life - self.life_timer) / shrink_time
-        else:
-            scale_factor = 1.0
-
-        current_size = max(1, int(self.max_size * scale_factor))
-        self.image = pygame.transform.scale(base_frame, (current_size, current_size))
-        self.rect = self.image.get_rect(center=(self.x, self.y))
-
+                for e in self.enemy_group:
+                    if e.alive() and pygame.math.Vector2(self.x, self.y).distance_to(e.pos) <= self.radius:
+                        e.take_damage(damage)
+                        hit_count += 1
+                        if hit_count >= max_hits:
+                            break
 
 class LaserMixin:
     def init_laser_vars(self):
@@ -310,9 +325,12 @@ class Tower(pygame.sprite.Sprite):
             for enemy in enemy_group:
                 if getattr(enemy, "is_dying", False) or getattr(enemy, "is_untargetable", False) or enemy.health <= 0:
                     continue
-                dist = tower_pos.distance_to(enemy.pos)
-                if dist < min_dist and dist <= self.range:
-                    min_dist = dist
+
+                # Calculamos la distancia hasta el borde del enemigo, no hasta su centro
+                dist_to_edge = tower_pos.distance_to(enemy.pos) - getattr(enemy, "radius", 0)
+
+                if dist_to_edge < min_dist and dist_to_edge <= self.range:
+                    min_dist = dist_to_edge
                     closest_enemy = enemy
 
             if closest_enemy:

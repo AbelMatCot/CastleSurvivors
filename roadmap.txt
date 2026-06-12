@@ -1,98 +1,11 @@
-¡Totalmente normal, Nick! Es el clásico "Feature Creep": empiezas queriendo hacer un tres en raya y acabas programando un simulador de vida real. Para no tener que tirar a la basura medio código dentro de dos semanas, lo mejor es montar la estructura en capas muy definidas.
+todo animacion de muerte del generator es muy lenta. Bug animacion al generar quieto
 
-Aquí tienes el roadmap actualizado y ordenado para construir el "Roguelike Castle Defense" cuadrado sin morir en el intento.
+todo repair all
+todo cooldown de reparar
 
-### 🗺️ Roadmap Definitivo: Operación Castillo
+todo sistema de gemas
+todo sistema de pasivas
+todo ajustes
+todo el resto de bosses
 
-**Fase 1: Los Cimientos (Interfaz y Tablero)**
-
-* **Paso 1 (El Lienzo Maestro): Configurar la ventana principal como redimensionable y crear un pygame.Surface interno (el cerebro del juego) de 1280x720 píxeles. Todo se dibujará siempre en este Surface primero.
-
-* ** Paso 2 (El Reparto de Tierras): Dividir mentalmente ese lienzo en tres bloques:
-
-    UI Izquierda: 280x720 píxeles.
-
-    Tablero Central: 720x720 píxeles.
-
-    UI Derecha: 280x720 píxeles.
-
-* ** Paso 3 (La Rejilla): Dibujar la cuadrícula en el tablero central. Al ser 720x720, ahora te caben exactamente 18x18 celdas (de 40x40 píxeles cada una). Sigue usando el truco de dibujar las líneas grises para no construir a ciegas.
-
-* ** Paso 4 (El Back-end): Crear la estructura de datos en código. Será una matriz de 18x18 (mapa[18][18]) para controlar el estado interno de cada casilla ("vacía", "spawn", "muro", "torre").
-
-
-* ** Paso 5 (El Estirón Final): Implementar la función pygame.transform.scale() al final de tu bucle principal. Cogerá tu Surface de 1280x720 y lo estirará para que ocupe el 100% de la ventana real del monitor, sea cual sea su tamaño, justo antes de actualizar la pantalla.
-
-**Fase 2: El Asedio (Spawns y Movimiento)**
-
-* **Paso 5:** Colocar la entidad "Castillo" en el centro exacto de la matriz (celda 7,7).
-* **Paso 6:** Lógica de Spawn: Generar cuadrados rojos (enemigos) en celdas aleatorias exclusivas del anillo exterior del tablero.
-* **Paso 7:** Movimiento: Usar vectores para que los enemigos caminen en línea recta hacia las coordenadas centrales del castillo.
-* **Paso 8:** "Crowd Control": Añadir esa fuerza de separación entre enemigos para que se agrupen como un pelotón y no se fusionen en un solo píxel gigante.
-
-**Fase 3: El Albañil Defensor (Construcción y Colisiones)**
-
-* **Paso 9:** Lógica de ratón: Traducir el clic en la pantalla a coordenadas de la matriz (recuerda restar los 100px de la interfaz izquierda).
-* **Paso 10:** Construir: Al hacer clic, cambiar el estado de la matriz en esa celda e instanciar un "Muro" o "Torre".
-* **Paso 11:** Colisiones de asedio: Si un enemigo choca con una celda ocupada, cambia su estado de "CAMINANDO" a "ATACANDO" y se detiene.
-
-**Fase 4: Fuego a Discreción (El Combate)**
-
-* **Paso 12:** Vida y Daño: Los enemigos restan vida al muro o castillo cada X segundos. Si el muro llega a 0, desaparece de la matriz y el enemigo vuelve a "CAMINANDO".
-* **Paso 13:** El Radar: Las torres escanean un radio circular constantemente buscando enemigos.
-* **Paso 14:** Proyectiles: Las torres disparan hacia el enemigo más cercano dentro de su rango.
-
-**Fase 5: El Toque Roguelike (La Progresión)**
-
-* **Paso 15:** Sistema de XP: Los enemigos dan puntos y oro al morir.
-* **Paso 16:** El "Drafting": Al llenar la barra de experiencia, pausar el bucle del juego, oscurecer la pantalla y dibujar 3 rectángulos gigantes (cartas) en el centro para elegir recompensas o nuevas estructuras.
-
-Refactorizar es de cobardes, pero con este orden te aseguras de que la base sea lo bastante sólida como para soportar cualquier mecánica loca que le quieras meter en la Fase 5.
-
-
-
-
-
-
-
-
-🗺️ Roadmap del Proyecto
-Bloque 1: El Corazón del Juego (Movimiento y Spawn)
-
-    Paso 1: Configurar la ventana y el bucle principal ("Game Loop").
-
-    Paso 2: Crear el "Castillo" en el centro y el sistema de coordenadas.
-
-    Paso 3: Lógica de movimiento: Enemigos que aparecen fuera y avanzan hacia el centro usando vectores.
-
-    Paso 4: Generador de oleadas: Spawns aleatorios en los bordes de la pantalla.
-
-Bloque 2: Colisiones y Obstáculos
-
-    Paso 5: Creación de muros y torres (entidades estáticas).
-
-    Paso 6: Detección de colisiones: El enemigo deja de moverse si choca con un muro.
-
-    Paso 7: Sistema de "Salud": El enemigo golpea el muro, el muro pierde vida y desaparece.
-
-Bloque 3: El Sistema de Ataque
-
-    Paso 8: Torres que detectan enemigos en un radio circular.
-
-    Paso 9: Gestión de proyectiles: Balas que van desde la torre al enemigo.
-
-Bloque 4: La Capa Roguelike (Progresión)
-
-    Paso 10: Sistema de experiencia y niveles al matar enemigos.
-
-    Paso 11: El "Drafting": Menú de pausa con 3 cartas aleatorias para mejorar estadísticas o desbloquear torres.
-
-🛠️ Bibliotecas necesarias para el Bloque 1
-
-Para empezar con el movimiento y el spawn en Python, estas son las herramientas que tienes que investigar:
-
-    pygame-ce (o pygame): Es la base de todo. Investiga sobre pygame.display, pygame.event y, sobre todo, la clase pygame.Rect.
-
-    pygame.math: Esta es clave para lo que quieres hacer. Busca cómo funcionan los Vector2. Te permiten calcular la dirección hacia el castillo y mover al enemigo de forma suave sin volverte loco con la trigonometría.
-
-    random: Biblioteca estándar de Python. La vas a necesitar para que los enemigos no salgan siempre por el mismo sitio. Investiga random.randint() y random.choice().
+todo bug no se pueden romper las ruinas. quiza hacer queal construir junto a ruinas no se actualicen estas

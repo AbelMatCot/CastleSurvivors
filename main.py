@@ -95,7 +95,8 @@ player_gems = 0
 next_boss_time = 150.0
 bosses_spawned = 0
 
-def reset_game():
+
+def reset_game(starting_tower="arrow"):
     global castle_obj, current_tool, unlocked_towers, active_towers
     global level_up_options, card_rects, pause_rects, main_menu_rects
     global player_gold, player_gems, player_level, player_xp, xp_to_next_level, selected_card_idx
@@ -113,12 +114,18 @@ def reset_game():
     chest_group.empty()
     effects_group.empty()
 
-    castle_obj = ArrowTower(640, 360, is_castle=True)
+    from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, LightningTower, ThornsTower
+    tower_classes = {
+        "arrow": ArrowTower, "fireball": FireballTower, "kunai": KunaiTower,
+        "laser": LaserTower, "lightning": LightningTower, "thorns": ThornsTower
+    }
+
+    castle_obj = tower_classes[starting_tower](640, 360, is_castle=True)
     player_group.add(castle_obj)
 
     current_tool = None
-    unlocked_towers = ["arrow"]
-    active_towers = ["arrow", None, None, None]
+    unlocked_towers = [starting_tower]
+    active_towers = [starting_tower, None, None, None]
     level_up_options = []
     card_rects = []
     pause_rects = []
@@ -140,12 +147,13 @@ def reset_game():
     damage_timers = {}
     previous_structures_types = {}
 
-    tower_levels = {"arrow": 1, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
+    tower_levels = {"arrow": 0, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
+    tower_levels[starting_tower] = 1
 
     active_passives = []
     passive_levels = {
         "damage": 0, "firerate": 0, "range": 0, "health": 0, "regen": 0,
-        "armor": 0, "thorns": 0, "gold": 0, "xp": 0, "crit": 0
+        "armor": 0, "counter": 0, "gold": 0, "xp": 0, "crit": 0
     }
 
     grid = generate_initial_grid()
@@ -181,11 +189,21 @@ def reset_game():
 # Inicializamos la primera partida al abrir el juego
 reset_game()
 
+menu_offset_y = 0
+castle_options = [
+    {"title": "Archer Castle", "desc": TOWER_DESCRIPTIONS["arrow"][1], "type": "arrow", "id": "arrow"},
+    {"title": "Fire Castle", "desc": TOWER_DESCRIPTIONS["fireball"][1], "type": "fireball", "id": "fireball"},
+    {"title": "Kunai Castle", "desc": TOWER_DESCRIPTIONS["kunai"][1], "type": "kunai", "id": "kunai"},
+    {"title": "Laser Castle", "desc": TOWER_DESCRIPTIONS["laser"][1], "type": "laser", "id": "laser"},
+    {"title": "Lightning Castle", "desc": TOWER_DESCRIPTIONS["lightning"][1], "type": "lightning", "id": "lightning"},
+    {"title": "Thorns Castle", "desc": TOWER_DESCRIPTIONS["thorns"][1], "type": "thorns", "id": "thorns"}
+]
+
 # =====================================================================
 # BUCLE PRINCIPAL
 # =====================================================================
 async def main():
-    # Declaramos las globales para que Python no sufra un ictus
+    global menu_offset_y
     global running, time_scale, last_built_cell, game_state, current_tool, selected_card_idx
     global castle_max_hp, castle_hp, player_gold, player_gems, show_grid, card_rects
     global pause_rects, main_menu_rects, confirm_action, game_time, current_minute
@@ -238,46 +256,21 @@ async def main():
                 running = False
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if game_state == "PLAYING":
-                    clicked_chest = False
-                    for chest in chest_group:
-                        if chest.rect.collidepoint(mouseX, mouseY):
-                            chest.click()
-                            clicked_chest = True
-                            break
 
-                    if clicked_chest:
-                        continue
-
-                    if not on_grid:
-                        menu_btn_rect = pygame.Rect(40, 600, 200, 50)
-                        if menu_btn_rect.collidepoint(mouseX, mouseY):
-                            game_state = "PAUSED"
-
-                        rx_click = 1000
-                        for i in range(4):
-                            t_id = active_towers[i]
-                            if t_id:
-                                slot_rect = pygame.Rect(rx_click + 25 + (i * 60), 50, 50, 50)
-                                if slot_rect.collidepoint(mouseX, mouseY):
-                                    current_tool = t_id if current_tool != t_id else None
-
-                        wall_rect = pygame.Rect(rx_click + 25, 200, 50, 50)
-                        if wall_rect.collidepoint(mouseX, mouseY):
-                            current_tool = "wall" if current_tool != "wall" else None
-
-                        sell_rect = pygame.Rect(rx_click + 40, 420, 200, 50)
-                        if sell_rect.collidepoint(mouseX, mouseY):
-                            current_tool = "sell" if current_tool != "sell" else None
-
-                        rep_rect = pygame.Rect(rx_click + 40, 510, 200, 50)
-                        if rep_rect.collidepoint(mouseX, mouseY):
-                            current_tool = "repair" if current_tool != "repair" else None
-
-                if game_state == "LEVEL_UP":
+                # --- 1. MENÚS DE CARTAS ---
+                if game_state in ["LEVEL_UP", "CASTLE_SELECT"]:
                     for i, rect in enumerate(card_rects):
                         if rect.collidepoint(mouseX, mouseY):
+                            # Segundo clic (Confirmar)
                             if selected_card_idx == i:
+                                if game_state == "CASTLE_SELECT":
+                                    chosen_tower = castle_options[i]["id"]
+                                    reset_game(starting_tower=chosen_tower)
+                                    game_state = "PLAYING"
+                                    selected_card_idx = None
+                                    break
+
+                                # Si no es CASTLE_SELECT, sigue con LEVEL_UP normal
                                 chosen = level_up_options[i]
 
                                 if chosen["type"] == "upgrade_tower":
@@ -290,8 +283,7 @@ async def main():
                                         new_max = int(TOWER_BASE_HP[tower_levels[t_id]] * hp_buff)
                                         hp_delta = new_max - old_max
                                         for t in player_group:
-                                            if type(t).__name__.lower().startswith(t_id) and "castle" not in type(
-                                                    t).__name__.lower():
+                                            if type(t).__name__.lower().startswith(t_id) and "castle" not in type(t).__name__.lower():
                                                 t_col = int((t.x - offsetX) // grid_size)
                                                 t_row = int(t.y // grid_size)
                                                 if (t_row, t_col) in structures_hp:
@@ -332,9 +324,8 @@ async def main():
 
                                             elif cell == turret:
                                                 t_obj = next((t for t in player_group if
-                                                              not getattr(t, "is_castle", False) and int(
-                                                                  (t.x - offsetX) // grid_size) == c and int(
-                                                                  t.y // grid_size) == r), None)
+                                                              not getattr(t, "is_castle", False) and int((
+                                                                                                                     t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
                                                 if t_obj:
                                                     t_id = t_obj.tower_id
                                                     lvl = max(1, tower_levels.get(t_id, 1))
@@ -342,14 +333,10 @@ async def main():
                                                     new_max = int(TOWER_BASE_HP[lvl] * new_hp_buff)
                                                     structures_hp[coords] += (new_max - old_max)
 
-                                elif chosen["type"] == "heal":
-                                    castle_hp = min(castle_max_hp, castle_hp + (castle_max_hp // 2))
-                                elif chosen["type"] == "gold":
-                                    player_gold += 50
-                                elif chosen["type"] == "heal_20":
-                                    castle_hp = min(castle_max_hp, castle_hp + int(castle_max_hp * 0.2))
                                 elif chosen["type"] == "gold_100":
                                     player_gold += 100
+                                elif chosen["type"] == "heal":
+                                    castle_hp = min(castle_max_hp, castle_hp + int(castle_max_hp * 0.2))
                                 elif chosen["type"] == "gems_5":
                                     player_gems += 5
 
@@ -359,145 +346,183 @@ async def main():
                                 selected_card_idx = i
                             break
 
-                elif game_state == "PLAYING" and on_grid:
-                    if current_tool == "sell":
-                        if grid[hoverRow][hoverCol] in [wall, turret]:
-                            cell_type = grid[hoverRow][hoverCol]
-                            coords = (hoverRow, hoverCol)
-                            if coords in structures_hp:
-                                current_hp = structures_hp[coords]
-                                hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+                # --- 2. JUEGO ACTIVO ---
+                elif game_state == "PLAYING":
+                    clicked_chest = False
+                    for chest in chest_group:
+                        if chest.rect.collidepoint(mouseX, mouseY):
+                            chest.click()
+                            clicked_chest = True
+                            break
 
-                                if cell_type == wall:
-                                    max_hp = int((25 + (player_level * 1.5)) * hp_buff)
-                                    total_value = min(50, 10 + int(player_level * 0.8))
-                                    target_obj = None
-                                else:
-                                    target_obj = next((t for t in player_group if
-                                                       not getattr(t, "is_castle", False) and int(
-                                                           (t.x - offsetX) // grid_size) == hoverCol and int(
-                                                           t.y // grid_size) == hoverRow), None)
-                                    if target_obj:
-                                        t_id = target_obj.tower_id
-                                        max_hp = int(TOWER_BASE_HP[max(1, tower_levels[t_id])] * hp_buff)
-                                        total_value = TOWER_STATS[t_id][max(1, tower_levels[t_id])]["cost"]
+                    if clicked_chest:
+                        continue
+
+                    # 2.1 Clics en los botones de la interfaz
+                    if not on_grid:
+                        menu_btn_rect = pygame.Rect(40, 600, 200, 50)
+                        if menu_btn_rect.collidepoint(mouseX, mouseY):
+                            game_state = "PAUSED"
+
+                        rx_click = 1000
+                        for i in range(4):
+                            t_id = active_towers[i]
+                            if t_id:
+                                slot_rect = pygame.Rect(rx_click + 25 + (i * 60), 50, 50, 50)
+                                if slot_rect.collidepoint(mouseX, mouseY):
+                                    current_tool = t_id if current_tool != t_id else None
+
+                        wall_rect = pygame.Rect(rx_click + 25, 200, 50, 50)
+                        if wall_rect.collidepoint(mouseX, mouseY):
+                            current_tool = "wall" if current_tool != "wall" else None
+
+                        sell_rect = pygame.Rect(rx_click + 40, 420, 200, 50)
+                        if sell_rect.collidepoint(mouseX, mouseY):
+                            current_tool = "sell" if current_tool != "sell" else None
+
+                        rep_rect = pygame.Rect(rx_click + 40, 510, 200, 50)
+                        if rep_rect.collidepoint(mouseX, mouseY):
+                            current_tool = "repair" if current_tool != "repair" else None
+
+                    # 2.2 Clics dentro del tablero (Construir, vender, reparar)
+                    elif on_grid:
+                        if current_tool == "sell":
+                            if grid[hoverRow][hoverCol] in [wall, turret]:
+                                cell_type = grid[hoverRow][hoverCol]
+                                coords = (hoverRow, hoverCol)
+                                if coords in structures_hp:
+                                    current_hp = structures_hp[coords]
+                                    hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+
+                                    if cell_type == wall:
+                                        max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+                                        total_value = min(50, 10 + int(player_level * 0.8))
+                                        target_obj = None
                                     else:
-                                        max_hp = 1
-                                        total_value = 0
+                                        target_obj = next((t for t in player_group if
+                                                           not getattr(t, "is_castle", False) and int(
+                                                               (t.x - offsetX) // grid_size) == hoverCol and int(
+                                                               t.y // grid_size) == hoverRow), None)
+                                        if target_obj:
+                                            t_id = target_obj.tower_id
+                                            max_hp = int(TOWER_BASE_HP[max(1, tower_levels[t_id])] * hp_buff)
+                                            total_value = TOWER_STATS[t_id][max(1, tower_levels[t_id])]["cost"]
+                                        else:
+                                            max_hp = 1
+                                            total_value = 0
 
-                                current_value = total_value * (current_hp / max_hp)
-                                player_gold += int(current_value * 0.25)
-
-                                grid[hoverRow][hoverCol] = allow
-                                del structures_hp[coords]
-
-                                if cell_type == wall:
-                                    if coords in wall_masks: del wall_masks[coords]
-                                    update_neighbors_walls(hoverRow, hoverCol, grid, wall_masks, ruin_masks)
-                                elif cell_type == turret and target_obj:
-                                    target_obj.kill()
-
-                        elif (hoverRow, hoverCol) in ruin_masks:
-                            update_ruin_masks(hoverRow, hoverCol, grid, ruin_masks)
-                            update_neighbors_walls(hoverRow, hoverCol, grid, wall_masks, ruin_masks)
-
-                            fx_x = offsetX + (hoverCol * grid_size) + (grid_size // 2)
-                            fx_y = (hoverRow * grid_size) + (grid_size // 2)
-                            effects_group.add(Effect(fx_x, fx_y, assets.wallsmoke_sheet, scale_size=60, fps=15, num_frames=7))
-
-                    elif current_tool == "repair":
-                        if grid[hoverRow][hoverCol] in [wall, turret]:
-                            cell_type = grid[hoverRow][hoverCol]
-                            coords = (hoverRow, hoverCol)
-                            if coords in structures_hp:
-                                current_hp = structures_hp[coords]
-                                hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
-
-                                if cell_type == wall:
-                                    max_hp = int((25 + (player_level * 1.5)) * hp_buff)
-                                    total_value = min(50, 10 + int(player_level * 0.8))
-                                else:
-                                    target_obj = next((t for t in player_group if
-                                                       not getattr(t, "is_castle", False) and int(
-                                                           (t.x - offsetX) // grid_size) == hoverCol and int(
-                                                           t.y // grid_size) == hoverRow), None)
-                                    if target_obj:
-                                        t_id = target_obj.tower_id
-                                        max_hp = int(TOWER_BASE_HP[max(1, tower_levels[t_id])] * hp_buff)
-                                        total_value = TOWER_STATS[t_id][max(1, tower_levels[t_id])]["cost"]
-                                    else:
-                                        max_hp = 1
-                                        total_value = 0
-
-                                if current_hp < max_hp:
                                     current_value = total_value * (current_hp / max_hp)
-                                    repair_price = int((total_value - current_value) * 0.75)
-                                    if player_gold >= repair_price:
-                                        player_gold -= repair_price
-                                        structures_hp[coords] = max_hp
+                                    player_gold += int(current_value * 0.25)
 
-                    elif grid[hoverRow][hoverCol] == allow:
-                        hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+                                    grid[hoverRow][hoverCol] = allow
+                                    del structures_hp[coords]
 
-                        if current_tool == "wall":
-                            current_wall_cost = min(50, 10 + int(player_level * 0.8))
-                            if player_gold >= current_wall_cost:
-                                player_gold -= current_wall_cost
-                                grid[hoverRow][hoverCol] = wall
-                                structures_hp[(hoverRow, hoverCol)] = int((25 + (player_level * 1.5)) * hp_buff)
+                                    if cell_type == wall:
+                                        if coords in wall_masks: del wall_masks[coords]
+                                        update_neighbors_walls(hoverRow, hoverCol, grid, wall_masks, ruin_masks)
+                                    elif cell_type == turret and target_obj:
+                                        target_obj.kill()
 
-                                if (hoverRow, hoverCol) in ruin_masks:
-                                    del ruin_masks[(hoverRow, hoverCol)]
-
+                            elif (hoverRow, hoverCol) in ruin_masks:
+                                update_ruin_masks(hoverRow, hoverCol, grid, ruin_masks)
                                 update_neighbors_walls(hoverRow, hoverCol, grid, wall_masks, ruin_masks)
 
-                                posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
-                                posY_px = (hoverRow * grid_size) + (grid_size // 2)
-                                effects_group.add(Effect(posX_px, posY_px, assets.dust_sheet, scale_size=55, fps=11))
+                                fx_x = offsetX + (hoverCol * grid_size) + (grid_size // 2)
+                                fx_y = (hoverRow * grid_size) + (grid_size // 2)
+                                effects_group.add(Effect(fx_x, fx_y, assets.wallsmoke_sheet, scale_size=60, fps=15, num_frames=7))
 
-                        elif current_tool in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
-                            lvl = tower_levels[current_tool]
-                            stats = TOWER_STATS[current_tool][max(1, lvl)]
-                            current_count = sum(1 for t in player_group if
-                                                getattr(t, "tower_id", None) == current_tool and not getattr(t, "is_castle",
-                                                                                                             False))
+                        elif current_tool == "repair":
+                            if grid[hoverRow][hoverCol] in [wall, turret]:
+                                cell_type = grid[hoverRow][hoverCol]
+                                coords = (hoverRow, hoverCol)
+                                if coords in structures_hp:
+                                    current_hp = structures_hp[coords]
+                                    hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
 
-                            if current_count < stats["limit"]:
-                                cost = stats["cost"]
-                                if player_gold >= cost:
-                                    player_gold -= cost
-                                    grid[hoverRow][hoverCol] = turret
-                                    structures_hp[(hoverRow, hoverCol)] = int(TOWER_BASE_HP[max(1, lvl)] * hp_buff)
+                                    if cell_type == wall:
+                                        max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+                                        total_value = min(50, 10 + int(player_level * 0.8))
+                                    else:
+                                        target_obj = next((t for t in player_group if
+                                                           not getattr(t, "is_castle", False) and int(
+                                                               (t.x - offsetX) // grid_size) == hoverCol and int(
+                                                               t.y // grid_size) == hoverRow), None)
+                                        if target_obj:
+                                            t_id = target_obj.tower_id
+                                            max_hp = int(TOWER_BASE_HP[max(1, tower_levels[t_id])] * hp_buff)
+                                            total_value = TOWER_STATS[t_id][max(1, tower_levels[t_id])]["cost"]
+                                        else:
+                                            max_hp = 1
+                                            total_value = 0
+
+                                    if current_hp < max_hp:
+                                        current_value = total_value * (current_hp / max_hp)
+                                        repair_price = int((total_value - current_value) * 0.75)
+                                        if player_gold >= repair_price:
+                                            player_gold -= repair_price
+                                            structures_hp[coords] = max_hp
+
+                        elif grid[hoverRow][hoverCol] == allow:
+                            hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+
+                            if current_tool == "wall":
+                                current_wall_cost = min(50, 10 + int(player_level * 0.8))
+                                if player_gold >= current_wall_cost:
+                                    player_gold -= current_wall_cost
+                                    grid[hoverRow][hoverCol] = wall
+                                    structures_hp[(hoverRow, hoverCol)] = int((25 + (player_level * 1.5)) * hp_buff)
+
+                                    if (hoverRow, hoverCol) in ruin_masks:
+                                        del ruin_masks[(hoverRow, hoverCol)]
+
+                                    update_neighbors_walls(hoverRow, hoverCol, grid, wall_masks, ruin_masks)
 
                                     posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
                                     posY_px = (hoverRow * grid_size) + (grid_size // 2)
+                                    effects_group.add(Effect(posX_px, posY_px, assets.dust_sheet, scale_size=55, fps=11))
 
-                                    if current_tool == "arrow":
-                                        player_group.add(ArrowTower(posX_px, posY_px))
-                                    elif current_tool == "fireball":
-                                        player_group.add(FireballTower(posX_px, posY_px))
-                                    elif current_tool == "kunai":
-                                        player_group.add(KunaiTower(posX_px, posY_px))
-                                    elif current_tool == "laser":
-                                        player_group.add(LaserTower(posX_px, posY_px))
-                                    elif current_tool == "lightning":
-                                        player_group.add(LightningTower(posX_px, posY_px))
-                                    elif current_tool == "thorns":
-                                        player_group.add(ThornsTower(posX_px, posY_px))
+                            elif current_tool in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
+                                lvl = tower_levels[current_tool]
+                                stats = TOWER_STATS[current_tool][max(1, lvl)]
+                                current_count = sum(1 for t in player_group if
+                                                    getattr(t, "tower_id", None) == current_tool and not getattr(t, "is_castle",
+                                                                                                                 False))
 
-                                    base_y = (hoverRow * grid_size) + grid_size
-                                    effects_group.add(TowerSmoke(posX_px, base_y, assets.smoke_sheet, goes_right=False))
-                                    effects_group.add(TowerSmoke(posX_px, base_y, assets.smoke_sheet, goes_right=True))
+                                if current_count < stats["limit"]:
+                                    cost = stats["cost"]
+                                    if player_gold >= cost:
+                                        player_gold -= cost
+                                        grid[hoverRow][hoverCol] = turret
+                                        structures_hp[(hoverRow, hoverCol)] = int(TOWER_BASE_HP[max(1, lvl)] * hp_buff)
 
-                                    last_built_cell = (hoverRow, hoverCol)
+                                        posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
+                                        posY_px = (hoverRow * grid_size) + (grid_size // 2)
+
+                                        if current_tool == "arrow":
+                                            player_group.add(ArrowTower(posX_px, posY_px))
+                                        elif current_tool == "fireball":
+                                            player_group.add(FireballTower(posX_px, posY_px))
+                                        elif current_tool == "kunai":
+                                            player_group.add(KunaiTower(posX_px, posY_px))
+                                        elif current_tool == "laser":
+                                            player_group.add(LaserTower(posX_px, posY_px))
+                                        elif current_tool == "lightning":
+                                            player_group.add(LightningTower(posX_px, posY_px))
+                                        elif current_tool == "thorns":
+                                            player_group.add(ThornsTower(posX_px, posY_px))
+
+                                        base_y = (hoverRow * grid_size) + grid_size
+                                        effects_group.add(TowerSmoke(posX_px, base_y, assets.smoke_sheet, goes_right=False))
+                                        effects_group.add(TowerSmoke(posX_px, base_y, assets.smoke_sheet, goes_right=True))
+
+                                        last_built_cell = (hoverRow, hoverCol)
 
             if event.type == pygame.MOUSEBUTTONUP:
                 if game_state == "MAIN_MENU":
                     for rect, opt in main_menu_rects:
                         if rect.collidepoint(mouseX, mouseY):
                             if opt == "Play":
-                                reset_game() # Reiniciamos por si venimos de salir de una partida
-                                game_state = "PLAYING"
+                                game_state = "MENU_TRANSITION"  # Iniciamos la animación
                             elif opt == "Exit":
                                 running = False
                             else:
@@ -509,7 +534,7 @@ async def main():
                         if yes_rect.collidepoint(mouseX, mouseY):
                             if confirm_action == "Restart":
                                 reset_game()
-                                game_state = "PLAYING"
+                                game_state = "CASTLE_SELECT"
                             elif confirm_action == "Main Menu":
                                 reset_game()
                                 game_state = "MAIN_MENU"
@@ -532,7 +557,7 @@ async def main():
                     quit_rect = pygame.Rect(640 + 20, 500, 200, 50)
                     if restart_rect.collidepoint(mouseX, mouseY):
                         reset_game()
-                        game_state = "PLAYING"
+                        game_state = "CASTLE_SELECT"
                     elif quit_rect.collidepoint(mouseX, mouseY):
                         reset_game()
                         game_state = "MAIN_MENU"
@@ -644,6 +669,18 @@ async def main():
         for bullet in bullet_group:
             if type(bullet).__name__ not in ["ThornsArea", "IceBeamVisual", "LightningVisual"]:
                 gameboard.blit(bullet.image, bullet.rect)
+
+        for enemy in enemy_group:
+            if type(enemy).__name__ == "Boss" and not getattr(enemy, "is_dying", False) and hasattr(enemy, "max_health"):
+                bar_w = 40
+                bar_h = 4
+                bx = enemy.rect.centerx - (bar_w // 2)
+                by = enemy.pos.y + 25
+
+                ratio = max(0, enemy.health / enemy.max_health)
+                pygame.draw.rect(gameboard, "red", (bx, by, bar_w, bar_h))
+                pygame.draw.rect(gameboard, "green", (bx, by, int(bar_w * ratio), bar_h))
+                pygame.draw.rect(gameboard, "black", (bx, by, bar_w, bar_h), 1)
 
         effects_group.draw(gameboard)
         chest_group.draw(gameboard)
@@ -829,7 +866,7 @@ async def main():
                 is_pressed = (current_tool == t_id)
                 lvl = max(1, tower_levels[t_id])
                 cost = TOWER_STATS[t_id][lvl]["cost"]
-                draw_slot(gameboard, assets, slot_x, slot_y, 50, key_str, cost, is_pressed=is_pressed, t_id=t_id)
+                draw_slot(gameboard, assets, slot_x, slot_y, 50, key_str, cost, is_pressed=is_pressed, t_id=t_id, tier_lvl=lvl)
             else:
                 draw_slot(gameboard, assets, slot_x, slot_y, 50, key_str, None, is_pressed=False)
 
@@ -839,15 +876,25 @@ async def main():
             for i in range(6):
                 slot_x = start_px + (i * (p_size + p_spacing))
                 gameboard.blit(pygame.transform.scale(assets.btn_small_img, (p_size, p_size)), (slot_x, 140))
+
                 if i < len(active_passives):
                     p_id = active_passives[i]
                     lvl = passive_levels[p_id]
-                    pygame.draw.rect(gameboard, "#3b2f2f", (slot_x + 4, 144, p_size - 8, p_size - 8), border_radius=4)
-                    initial = p_id[0].upper()
-                    txt_surf = assets.ui_font_small.render(f"{initial}{lvl}", True, "yellow")
-                    txt_x = slot_x + (p_size // 2) - (txt_surf.get_width() // 2)
-                    txt_y = 140 + (p_size // 2) - (txt_surf.get_height() // 2)
-                    gameboard.blit(txt_surf, (txt_x, txt_y))
+
+                    # 1. Icono de la pasiva escalado
+                    if p_id in assets.stat_icons:
+                        p_icon = pygame.transform.scale(assets.stat_icons[p_id], (24, 24))
+                        gameboard.blit(p_icon, (slot_x + 6, 144))
+
+                    # 2. Banderín colgando por la esquina inferior derecha
+                    if assets.tierframe and assets.tiers_sheet:
+                        bx = slot_x + 10
+                        by = 140 + p_size - 6
+                        gameboard.blit(assets.tierframe, (bx, by))
+
+                        tier_idx = min(7, max(0, lvl - 1))
+                        t_col, t_row = tier_idx % 4, tier_idx // 4
+                        gameboard.blit(assets.tiers_sheet, (bx, by + 3), (t_col * 16, t_row * 16, 16, 16))
 
             current_wall_cost = min(50, 10 + int(player_level * 0.8))
             wall_key = pygame.key.name(settings.controls["wall"])
@@ -914,8 +961,13 @@ async def main():
                 draw_action_btn(gameboard, assets, 640 - 120, 360, 100, 50, None, "Yes", is_pressed=yes_pressed)
                 draw_action_btn(gameboard, assets, 640 + 20, 360, 100, 50, None, "No", is_pressed=no_pressed)
 
-        elif game_state == "MAIN_MENU":
-            main_menu_rects = draw_main_menu(gameboard, assets, mouseX, mouseY)
+
+        elif game_state in ["MAIN_MENU", "MENU_TRANSITION"]:
+            main_menu_rects = draw_main_menu(gameboard, assets, mouseX, mouseY, menu_offset_y)
+
+        elif game_state == "CASTLE_SELECT":
+            gameboard.blit(assets.bg_menu, (0, 0))
+            card_rects = draw_level_up_menu(gameboard, assets, castle_options, selected_card_idx, offsetX, width_gameboard)
 
         if assets.cursor_img:
             gameboard.blit(assets.cursor_img, (mouseX, mouseY))
@@ -930,7 +982,15 @@ async def main():
 
         pygame.display.flip()
         dt = clock.tick(60) / 1000
-        await asyncio.sleep(0)
+
+        if sys.platform == "emscripten":
+            await asyncio.sleep(0)
+
+        if game_state == "MENU_TRANSITION":
+            menu_offset_y -= 1500 * dt
+            if menu_offset_y <= -800:
+                game_state = "CASTLE_SELECT"
+                menu_offset_y = 0
 
         if game_state == "PLAYING":
             game_time += dt * time_scale
@@ -939,7 +999,25 @@ async def main():
 
             regen_lvl = passive_levels.get("regen", 0)
             if regen_lvl > 0:
-                castle_hp = min(castle_max_hp, castle_hp + (castle_max_hp * (0.01 * regen_lvl) * dt * time_scale))
+                # Castillo al 0.25% (Nerfeadito)
+                castle_regen_factor = (0.0025 * regen_lvl) * dt * time_scale
+                castle_hp = min(castle_max_hp, castle_hp + (castle_max_hp * castle_regen_factor))
+
+                # Muros y Torres se quedan al 0.5%
+                struct_regen_factor = (0.005 * regen_lvl) * dt * time_scale
+                hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+                wall_max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+
+                for r, c in list(structures_hp.keys()):
+                    cell = grid[r][c]
+                    if cell == wall:
+                        structures_hp[(r, c)] = min(wall_max_hp,
+                                                    structures_hp[(r, c)] + (wall_max_hp * struct_regen_factor))
+                    elif cell == turret:
+                        t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
+                        if t_obj:
+                            t_max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_obj.tower_id, 1))] * hp_buff)
+                            structures_hp[(r, c)] = min(t_max_hp,structures_hp[(r, c)] + (t_max_hp * struct_regen_factor))
 
             if len(spawn_schedule) > 0:
                 next_spawn_time, next_spawn_type = spawn_schedule[0]
@@ -980,6 +1058,7 @@ async def main():
 
                     # Le aplicamos la dificultad también a este tanque
                     minotaur.health *= difficulty_multiplier
+                    minotaur.max_health = minotaur.health
                     minotaur.base_damage = int(minotaur.base_damage * difficulty_multiplier)
 
                     enemy_group.add(minotaur)
@@ -991,7 +1070,7 @@ async def main():
 
             enemy_group.update(dt * time_scale, grid, enemy_group=enemy_group, effects_group=effects_group,
                                structures_hp=structures_hp,
-                               passive_levels=passive_levels, thorns_values=THORNS_VALUES)
+                               passive_levels=passive_levels, thorns_values=COUNTER_VALUES)
 
             for coords, hp in structures_hp.items():
                 if coords in previous_structures_hp and hp < previous_structures_hp[coords]:
@@ -1119,10 +1198,17 @@ async def main():
                             effects_group.add(exp)
                         bullet.kill()
 
-            hits = pygame.sprite.groupcollide(bullet_group, enemy_group, False, False)
-            for arrow, enemies_hit in hits.items():
+            for arrow in bullet_group:
                 if not hasattr(arrow, "pierce"):
                     continue
+
+                enemies_hit = []
+                for e in enemy_group:
+                    if not getattr(e, "is_dying", False):
+                        dist = arrow.pos.distance_to(e.pos)
+                        # Comparamos la distancia con los radios de ambos
+                        if dist <= (arrow.size / 2 + e.radius):
+                            enemies_hit.append(e)
 
                 for enemy in enemies_hit:
                     if enemy not in getattr(arrow, "hit_enemies", set()):
@@ -1138,7 +1224,8 @@ async def main():
                                          int(arrow.aoe_radius * 3.5), fps=20)
                             effects_group.add(exp)
                             for e in enemy_group:
-                                if pygame.math.Vector2(arrow.rect.center).distance_to(e.pos) <= arrow.aoe_radius:
+                                dist_to_edge = pygame.math.Vector2(arrow.rect.center).distance_to(e.pos) - getattr(e, "radius", 0)
+                                if dist_to_edge <= arrow.aoe_radius:
                                     e.take_damage(final_damage)
                         else:
                             enemy.take_damage(final_damage)

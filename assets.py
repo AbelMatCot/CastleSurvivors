@@ -42,6 +42,12 @@ class GameAssets:
         self.btn_wide_img = None
         self.btn_wide_pressed_img = None
 
+        self.raw_tower_icons = {}
+        self.stat_icons = {}
+        self.lvlcard = None
+        self.cardframe = None
+        self.tiers_sheet = None
+
         self.keys_sheet = None
         self.cursor_img = None
         self.panel_bg = None
@@ -79,6 +85,8 @@ class GameAssets:
                 except FileNotFoundError:
                     raw_img = pygame.Surface((30, 60))
                     raw_img.fill("magenta")
+
+            self.raw_tower_icons[tower_name] = raw_img
 
             icon_surf = pygame.Surface((30, 40), pygame.SRCALPHA)
             icon_surf.blit(raw_img, (0, 0), (0, 0, 30, 40))
@@ -196,5 +204,30 @@ class GameAssets:
                 self.ui_tower_icons["speed_x"] = pygame.transform.scale(icon_x, (28, 28))
             except FileNotFoundError:
                 print("Warning: speedup.png not found.")
+
+        # 7. Cartas y Stats
+        try:
+            self.lvlcard = pygame.image.load(os.path.join(ui_path, "lvlcard.png")).convert_alpha()
+            self.cardframe = pygame.image.load(os.path.join(ui_path, "cardframe.png")).convert_alpha()
+            self.tiers_sheet = pygame.image.load(os.path.join(ui_path, "tiers.png")).convert_alpha()
+            self.tierframe = pygame.image.load(os.path.join(ui_path, "tierframe.png")).convert_alpha()
+        except FileNotFoundError as e:
+            print(f"Cards ERROR: Image {e} not found.")
+
+        # Mapeamos los nombres de tu lógica a los nombres de tus archivos PNG
+        stat_mapping = {
+            "damage": "dmg", "firerate": "rate", "range": "range", "health": "hp",
+            "regen": "regen", "armor": "armor", "counter": "counter", "gold": "gold",
+            "xp": "xp", "crit": "crit",
+            "heal": "heal", "gold_100": "goldbag", "gems": "gems"
+        }
+        stats_path = os.path.join("Assets", "Sprites", "Stats")
+
+        for logic_name, file_name in stat_mapping.items():
+            try:
+                img = pygame.image.load(os.path.join(stats_path, f"{file_name}.png")).convert_alpha()
+                self.stat_icons[logic_name] = img
+            except FileNotFoundError:
+                pass  # Si falta alguno, pasamos de largo para que no pete
 
 core_assets = GameAssets()

@@ -70,12 +70,17 @@ def setup_spawn_point(spwn_grp, effects_group, grid, spawn_type, forced_initial_
         effects_group.add(dust)
 
 def get_level_up_cards(player_level, active_towers, tower_levels, active_passives, passive_levels):
+    # 1. Definimos las cartas de relleno UNA SOLA VEZ y para siempre
+    fallback_cards = [
+        {"title": "Heal Castle", "desc": PASSIVE_DESCRIPTIONS["heal"], "type": "heal", "id": "heal", "lvl": 8},
+        {"title": "Gold Bag", "desc": PASSIVE_DESCRIPTIONS["gold_100"], "type": "gold", "id": "gold_100", "lvl": 8},
+        {"title": "Gems", "desc": PASSIVE_DESCRIPTIONS["gems_5"], "type": "gems_5", "id": "gems", "lvl": 8}
+    ]
+
+    # 2. Si pasas del nivel 50, te comes el relleno entero
     if player_level > 50:
-        return [
-            {"title": "Heal Castle 20%", "desc": "Restores a large amount of lost health.", "type": "heal_20"},
-            {"title": "Gold Bag (+100)", "desc": "A big boost for your economy.", "type": "gold_100"},
-            {"title": "Gems (+5)", "desc": "Useful for meta-progression.", "type": "gems_5"}
-        ]
+        return fallback_cards
+
     pool = []
     has_free_slot = None in active_towers
 
@@ -84,27 +89,28 @@ def get_level_up_cards(player_level, active_towers, tower_levels, active_passive
         name = UI_TOWER_NAMES[t_id]
         if lvl == 0:
             if has_free_slot:
-                pool.append({"title": f"Unlock {name}", "desc": TOWER_DESCRIPTIONS[t_id][1], "type": "upgrade_tower", "id": t_id})
+                pool.append({"title": name, "desc": TOWER_DESCRIPTIONS[t_id][1], "type": "upgrade_tower", "id": t_id, "lvl": 1})
         elif lvl < 8:
-            pool.append({"title": f"Upgrade {name} (Lvl{lvl + 1})", "desc": TOWER_DESCRIPTIONS[t_id][lvl + 1], "type": "upgrade_tower", "id": t_id})
+            pool.append({"title": name, "desc": TOWER_DESCRIPTIONS[t_id][lvl + 1], "type": "upgrade_tower", "id": t_id, "lvl": lvl + 1})
 
     passive_names = {
         "damage": "Damage", "firerate": "Firerate", "range": "Range/Area",
         "health": "Max Health", "regen": "Health Regen", "armor": "Armor",
-        "thorns": "Thorns", "gold": "Extra Gold", "xp": "Extra XP", "crit": "Critical"
+        "counter": "Counter", "gold": "Extra Gold", "xp": "Extra XP", "crit": "Critical"
     }
 
     for p_id, lvl in passive_levels.items():
         if lvl == 0:
             if len(active_passives) < 6:
-                pool.append({"title": f"Passive: {passive_names[p_id]}", "desc": PASSIVE_DESCRIPTIONS[p_id], "type": "unlock_passive", "id": p_id})
+                pool.append({"title": passive_names[p_id], "desc": PASSIVE_DESCRIPTIONS[p_id], "type": "unlock_passive", "id": p_id, "lvl": 1})
         elif lvl < 4:
-            pool.append({"title": f"Upgrade: {passive_names[p_id]} (Lvl{lvl + 1})", "desc": PASSIVE_DESCRIPTIONS[p_id], "type": "upgrade_passive", "id": p_id})
+            pool.append({"title": passive_names[p_id], "desc": PASSIVE_DESCRIPTIONS[p_id], "type": "upgrade_passive", "id": p_id, "lvl": lvl + 1})
 
     random.shuffle(pool)
     cards = pool[:3]
 
-    fallbacks = [{"title": "Gold Bag (+50)", "type": "gold"}, {"title": "Heal Castle 50%", "type": "heal"}]
+    # 3. Si no hay suficientes mejoras en la pool (porque lo has maxeado todo antes del 50), rellenamos hasta tener 3
     while len(cards) < 3:
-        cards.append(random.choice(fallbacks))
+        cards.append(random.choice(fallback_cards))
+
     return cards

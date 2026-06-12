@@ -22,7 +22,7 @@ row = 24
 # ESTADÍSTICAS BÁSICAS Y NOMBRES
 # =====================================================================
 TOWER_BASE_HP = [0, 50, 55, 65, 80, 100, 125, 150, 200]
-THORNS_VALUES = [0, 2, 4, 7, 10]
+COUNTER_VALUES = [0, 2, 4, 7, 10]
 
 UI_TOWER_NAMES = {
     "arrow": "Archer Tower", "fireball": "Fireball", "kunai": "Kunai Volley",
@@ -80,12 +80,15 @@ PASSIVE_DESCRIPTIONS = {
     "firerate": "Increases the attack speed of all your towers by 5% per level.",
     "range": "Increases the range and area of effect of your towers by 5% per level.",
     "health": "Increases Castle and Wall maximum health by 5% per level.",
-    "regen": "Regenerates 1% of Castle health per second per level.",
+    "regen": "Regenerates 0,5% of Castle and structures health per second per level.",
     "armor": "Reduces incoming damage to Castle and Walls by 5% per level.",
-    "thorns": "Enemies taking damage from walls or castle take damage back.",
+    "counter": "Structures avoid damage while hurting the attacker.",
     "gold": "Increases gold earned from enemies by 5% per level.",
     "xp": "Increases experience earned from enemies by 5% per level.",
-    "crit": "10% chance per level to deal 150% damage."
+    "crit": "10% chance per level to deal 150% damage.",
+    "heal": "Restores 20% of your Castle's maximum health.",
+    "gold_100": "Adds 100 gold to your current stash.",
+    "gems_5": "Grants 5 extra gems for permanent upgrades."
 }
 
 # =====================================================================

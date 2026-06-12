@@ -171,7 +171,7 @@ class Enemy(pygame.sprite.Sprite):
                     elif cell == 3:
                         pass
 
-                    thorns_lvl = passive_levels.get("thorns", 0) if passive_levels else 0
+                    thorns_lvl = passive_levels.get("counter", 0) if passive_levels else 0
                     if thorns_lvl > 0 and thorns_values:
                         self.take_damage(thorns_values[thorns_lvl])
 
@@ -779,7 +779,7 @@ class Boss(Enemy):
                                         hit_castle = True
 
                     # Daño devuelto por espinas (solo 1 vez por hachazo)
-                    thorns_lvl = passive_levels.get("thorns", 0) if passive_levels else 0
+                    thorns_lvl = passive_levels.get("counter", 0) if passive_levels else 0
                     if thorns_lvl > 0 and thorns_values:
                         self.take_damage(thorns_values[thorns_lvl])
 
