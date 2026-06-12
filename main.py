@@ -228,9 +228,9 @@ async def main():
 
         time_scale = 1.0
         if is_x_pressed:
-            time_scale = 8.0
+            time_scale = 6.0
         elif is_z_pressed:
-            time_scale = 4.0
+            time_scale = 2.0
 
 
         physical_mouseX, physical_mouseY = pygame.mouse.get_pos()
