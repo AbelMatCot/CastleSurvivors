@@ -4,5 +4,11 @@ summary.txt
 build/
 __pycache__/
 .idea/
+*.apk
+*.tar.gz
+__pycache__/
+*.pyc
+.DS_Store
+
 
 # pygbag --disable-sound-format-error .
