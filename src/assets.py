@@ -56,12 +56,14 @@ class GameAssets:
         self.chests_sheet = None
         self.coins_sheet = None
 
+        self.gear_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "gear.png")).convert_alpha()
+
     def load_all(self, use_legible_font):
         # 1. Fuentes
         if use_legible_font:
-            self.ui_font_large = pygame.font.SysFont("Arial", 28, bold=True)
-            self.ui_font_medium = pygame.font.SysFont("Arial", 20, bold=True)
-            self.ui_font_small = pygame.font.SysFont("Arial", 14, bold=True)
+            self.ui_font_large = pygame.font.SysFont("Tahoma", 28, bold=True)
+            self.ui_font_medium = pygame.font.SysFont("Tahoma", 20, bold=True)
+            self.ui_font_small = pygame.font.SysFont("Tahoma", 16, bold=True)
         else:
             font_path = os.path.join("Assets", "alagard.ttf")
             try:
@@ -69,10 +71,10 @@ class GameAssets:
                 self.ui_font_medium = pygame.font.Font(font_path, 22)
                 self.ui_font_small = pygame.font.Font(font_path, 16)
             except FileNotFoundError:
-                print("Warning: Assets/alagard.ttf not found. Using Arial as fallback.")
-                self.ui_font_large = pygame.font.SysFont("Arial", 28, bold=True)
-                self.ui_font_medium = pygame.font.SysFont("Arial", 20, bold=True)
-                self.ui_font_small = pygame.font.SysFont("Arial", 14, bold=True)
+                print("Warning: Assets/alagard.ttf not found. Using Tahoma as fallback.")
+                self.ui_font_large = pygame.font.SysFont("Tahoma", 28, bold=True)
+                self.ui_font_medium = pygame.font.SysFont("Tahoma", 20, bold=True)
+                self.ui_font_small = pygame.font.SysFont("Tahoma", 16, bold=True)
 
         # 2. Iconos y Torres UI
         for tower_name in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:

@@ -167,7 +167,7 @@ class Chest(pygame.sprite.Sprite):
 
                     # Y las monedas las disparamos hacia arriba (cy_chest - 35)
                     cx_coin = (canvas_w - c_img.get_width()) // 2
-                    cy_coin = cy_chest - 35
+                    cy_coin = cy_chest - 15
                     combined.blit(c_img, (cx_coin, cy_coin))
 
                     self.image = combined

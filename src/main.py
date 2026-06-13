@@ -3,6 +3,11 @@ import random
 import os
 import sys
 import asyncio
+try:
+    import ctypes
+    ctypes.windll.user32.SetProcessDPIAware()
+except:
+    pass
 
 from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, LightningTower, ThornsTower, TOWER_STATS
 from Entities.effects import Effect, TowerSmoke
@@ -21,12 +26,9 @@ from Entities.Enemies.enemies import Boss
 pygame.init()
 pygame.font.init()
 
-# Pantalla completa sin bordes obligatoria
-os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
-desktop_size = pygame.display.get_desktop_sizes()[0]
-screen = pygame.display.set_mode(desktop_size, pygame.NOFRAME)
-
 base_res = (1280, 720)
+# ¡Escalado nativo por hardware activado!
+screen = pygame.display.set_mode(base_res, pygame.SCALED | pygame.FULLSCREEN)
 gameboard = pygame.Surface(base_res)
 clock = pygame.time.Clock()
 running = True
@@ -105,6 +107,9 @@ def reset_game(starting_tower="arrow"):
     global spawn_counts, existing_spawns_pos, spawn_schedule, last_built_cell
     global game_time, current_minute, difficulty_multiplier, time_scale, grid
     global next_boss_time, bosses_spawned, forced_initial_spawns
+    global repairing_structures, repair_all_cooldown
+    repairing_structures = {}
+    repair_all_cooldown = 0.0
 
     player_group.empty()
     enemy_group.empty()
@@ -208,6 +213,7 @@ async def main():
     global pause_rects, main_menu_rects, confirm_action, game_time, current_minute
     global difficulty_multiplier, next_boss_time, bosses_spawned, previous_structures_hp
     global previous_structures_types, level_up_options, player_xp, player_level, xp_to_next_level
+    global repairing_structures, repair_all_cooldown
 
     while running:
         keys = pygame.key.get_pressed()
@@ -434,7 +440,7 @@ async def main():
                             if grid[hoverRow][hoverCol] in [wall, turret]:
                                 cell_type = grid[hoverRow][hoverCol]
                                 coords = (hoverRow, hoverCol)
-                                if coords in structures_hp:
+                                if coords in structures_hp and coords not in repairing_structures:
                                     current_hp = structures_hp[coords]
                                     hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
 
@@ -442,10 +448,7 @@ async def main():
                                         max_hp = int((25 + (player_level * 1.5)) * hp_buff)
                                         total_value = min(50, 10 + int(player_level * 0.8))
                                     else:
-                                        target_obj = next((t for t in player_group if
-                                                           not getattr(t, "is_castle", False) and int(
-                                                               (t.x - offsetX) // grid_size) == hoverCol and int(
-                                                               t.y // grid_size) == hoverRow), None)
+                                        target_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == hoverCol and int(t.y // grid_size) == hoverRow), None)
                                         if target_obj:
                                             t_id = target_obj.tower_id
                                             max_hp = int(TOWER_BASE_HP[max(1, tower_levels[t_id])] * hp_buff)
@@ -459,7 +462,15 @@ async def main():
                                         repair_price = int((total_value - current_value) * 0.75)
                                         if player_gold >= repair_price:
                                             player_gold -= repair_price
-                                            structures_hp[coords] = max_hp
+                                            repairing_structures[coords] = {
+                                                "state": "repairing",
+                                                "type": cell_type,
+                                                "rate": (max_hp * 0.3) if cell_type == turret else (max_hp * 0.5),
+                                                "cd_time": 2.0,
+                                                "cd_timer": 0.0,
+                                                "anim_timer": 0.0,
+                                                "target_heal": max_hp - current_hp
+                                            }
 
                         elif grid[hoverRow][hoverCol] == allow:
                             hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
@@ -522,6 +533,9 @@ async def main():
                         if rect.collidepoint(mouseX, mouseY):
                             if opt == "Play":
                                 game_state = "MENU_TRANSITION"  # Iniciamos la animación
+                            elif opt == "Settings":
+                                settings.use_legible_font = not settings.use_legible_font
+                                assets.load_all(settings.use_legible_font)
                             elif opt == "Exit":
                                 running = False
                             else:
@@ -684,6 +698,18 @@ async def main():
                 pygame.draw.rect(gameboard, "green", (bx, by, int(bar_w * ratio), bar_h))
                 pygame.draw.rect(gameboard, "black", (bx, by, bar_w, bar_h), 1)
 
+        for coords, data in repairing_structures.items():
+            r, c = coords
+            frame_idx = int(data["anim_timer"] * 15) % 4
+            gear_img = assets.gear_sheet.subsurface((frame_idx * 26, 0, 26, 26))
+
+            px = offsetX + (c * grid_size) + (grid_size // 2) - 13
+            py = (r * grid_size) + (grid_size // 2) - 13
+            if data["type"] == turret:
+                py -= (grid_size // 2)  # Lo anclamos exactamente a la cintura de la torre
+
+            gameboard.blit(gear_img, (px, py))
+
         effects_group.draw(gameboard)
         chest_group.draw(gameboard)
 
@@ -808,18 +834,24 @@ async def main():
 
                 action_text = ""
                 color_text = "white"
+                use_small_font = False
                 if current_tool == "sell":
                     action_text = f"+{sell_price} G"
                     color_text = "yellow"
                 elif current_tool == "repair":
-                    action_text = "Max HP" if current_hp >= max_hp else f"-{repair_price} G"
-                    color_text = "gray" if current_hp >= max_hp else "red"
+                    if (r, c) in repairing_structures:
+                        action_text = "repairing"
+                        color_text = "gray"
+                        use_small_font = True
+                    else:
+                        action_text = "Max HP" if current_hp >= max_hp else f"-{repair_price} G"
+                        color_text = "gray" if current_hp >= max_hp else "red"
 
                 if action_text:
+                    font_hover = assets.ui_font_small if use_small_font else assets.ui_font_medium
                     for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
-                        gameboard.blit(assets.ui_font_medium.render(action_text, True, "black"),
-                                       (mouseX + 15 + dx, mouseY + 15 + dy))
-                    gameboard.blit(assets.ui_font_medium.render(action_text, True, color_text), (mouseX + 15, mouseY + 15))
+                        gameboard.blit(font_hover.render(action_text, True, "black"), (mouseX + 15 + dx, mouseY + 15 + dy))
+                    gameboard.blit(font_hover.render(action_text, True, color_text), (mouseX + 15, mouseY + 15))
 
         if assets.panel_bg:
             gameboard.blit(assets.panel_bg, (0, 0))
@@ -918,11 +950,121 @@ async def main():
             is_rep_pressed = (current_tool == "repair")
             draw_action_btn(gameboard, assets, rx + 40, 510, 200, 50, rep_key, "Repair", is_pressed=is_rep_pressed)
 
+            # --- CÁLCULO GLOBAL DE REPAIR ALL ---
+            valid_repairs = []
+            total_repair_all_cost = 0
+            hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+
+            for coords, current_hp in structures_hp.items():
+                if coords not in repairing_structures:
+                    r, c = coords
+                    cell_type = grid[r][c]
+                    max_hp = 1
+                    total_value = 0
+
+                    if cell_type == wall:
+                        max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+                        total_value = min(50, 10 + int(player_level * 0.8))
+                    elif cell_type == turret:
+                        t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((
+                                                                                                                        t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
+                        if t_obj:
+                            t_id = t_obj.tower_id
+                            max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_id, 1))] * hp_buff)
+                            total_value = TOWER_STATS[t_id][max(1, tower_levels.get(t_id, 1))]["cost"]
+
+                    if current_hp < max_hp:
+                        current_value = total_value * (current_hp / max_hp)
+                        repair_price = int((total_value - current_value) * 0.75)
+                        valid_repairs.append((coords, cell_type, max_hp, max_hp - current_hp))
+                        total_repair_all_cost += repair_price
+
+            # --- DIBUJADO Y LÓGICA DEL BOTÓN PERSONALIZADO ---
             rep_all_rect = pygame.Rect(rx + 40, 600, 200, 50)
-            is_rep_all_pressed = keys[settings.controls["repair_all"]] or (
-                    rep_all_rect.collidepoint(mouseX, mouseY) and pygame.mouse.get_pressed()[0])
-            draw_action_btn(gameboard, assets, rx + 40, 600, 200, 50, rep_all_key, "Repair All", repair_all_cost,
-                            is_pressed=is_rep_all_pressed)
+            mouse_clicked = pygame.mouse.get_pressed()[0]
+
+            # Ejecuta la compra si el cooldown es cero
+            if (keys[settings.controls["repair_all"]] or (
+                    rep_all_rect.collidepoint(mouseX, mouseY) and mouse_clicked)):
+                if repair_all_cooldown <= 0 and player_gold >= total_repair_all_cost and len(valid_repairs) > 0:
+                    player_gold -= total_repair_all_cost
+                    repair_all_cooldown = 10.0
+                    for coords, cell_type, m_hp, missing_hp in valid_repairs:
+                        repairing_structures[coords] = {
+                            "state": "repairing",
+                            "type": cell_type,
+                            "rate": (m_hp * 0.3) if cell_type == turret else (m_hp * 0.5),
+                            "cd_time": 2.0,
+                            "cd_timer": 0.0,
+                            "anim_timer": 0.0,
+                            "target_heal": missing_hp
+                        }
+
+            # Dibujamos el estado del botón hundido por cooldown
+            is_rep_all_pressed = (keys[settings.controls["repair_all"]] or (
+                        rep_all_rect.collidepoint(mouseX, mouseY) and mouse_clicked)) or repair_all_cooldown > 0
+            img = assets.btn_wide_pressed_img if is_rep_all_pressed else assets.btn_wide_img
+            y_off = 4 if is_rep_all_pressed else 0
+
+            draw_9_slice_button(gameboard, img, pygame.Rect(rep_all_rect.x, rep_all_rect.y + y_off, rep_all_rect.width, rep_all_rect.height - y_off), edge_px=14)
+
+            # Letra del bind (¡Con el icono de la tecla recuperado!)
+            key_text = pygame.key.name(settings.controls["repair_all"])
+            pygame.draw.rect(gameboard, "#3b2f2f", (rep_all_rect.x - 10, rep_all_rect.y - 10 + y_off, 26, 26), border_radius=4)
+            pygame.draw.rect(gameboard, "#d2b48c", (rep_all_rect.x - 10, rep_all_rect.y - 10 + y_off, 26, 26), 2, border_radius=4)
+
+            if assets.keys_sheet:
+                col_idx, row_idx = KEYMAP_COORDS.get(key_text.lower(), (7, 6))
+                key_img = extract_sprite(assets.keys_sheet, col_idx, row_idx, 8, 8)
+                if key_img:
+                    key_img = pygame.transform.scale(key_img, (22, 22))
+                    gameboard.blit(key_img, (rep_all_rect.x - 8, rep_all_rect.y - 8 + y_off))
+            else:
+                key_surf = assets.ui_font_medium.render(key_text.upper(), True, "white")
+                gameboard.blit(key_surf, (rep_all_rect.x - 3, rep_all_rect.y - 8 + y_off))
+
+            # Engranaje (Subido unos píxeles)
+            gear_x = rep_all_rect.right - 35
+            gear_y = rep_all_rect.y + 8 + y_off
+
+            # Texto centrado de forma absoluta en el botón (como estaba antes)
+            label_surf = assets.ui_font_medium.render("Repair All", False, "black")
+            text_x = rep_all_rect.x + (rep_all_rect.width // 2) - (label_surf.get_width() // 2)
+            gameboard.blit(label_surf, (text_x, rep_all_rect.y + 25 - label_surf.get_height() // 2 - 4 + y_off))
+
+            # Engranaje
+            gear_x = rep_all_rect.right - 35
+            gear_y = rep_all_rect.y + 8 + y_off
+
+            if repair_all_cooldown > 0:
+                frame_idx = int(game_time * 15) % 4
+                gameboard.blit(assets.gear_sheet, (gear_x, gear_y), (frame_idx * 26, 0, 26, 26))
+
+                # Número del cooldown en blanco con borde negro
+                cd_text = str(int(repair_all_cooldown + 0.99))
+                cd_surf_outline = assets.ui_font_medium.render(cd_text, False, "black")
+                cd_surf_white = assets.ui_font_medium.render(cd_text, False, "white")
+
+                cd_x = gear_x + 13 - cd_surf_white.get_width() // 2
+                cd_y = gear_y + 13 - cd_surf_white.get_height() // 2
+
+                # Dibujamos el borde (sombras en las 4 diagonales)
+                for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                    gameboard.blit(cd_surf_outline, (cd_x + dx, cd_y + dy))
+
+                # Dibujamos el número blanco encima
+                gameboard.blit(cd_surf_white, (cd_x, cd_y))
+            else:
+                gameboard.blit(assets.gear_sheet, (gear_x, gear_y), (0, 0, 26, 26))
+
+            # Precio (siempre debajo del botón)
+            ry = rep_all_rect.y + rep_all_rect.height + 2
+            rw_btn = 80
+            rh_btn = 28
+            rx_ribbon = rep_all_rect.x + (rep_all_rect.width // 2) - (rw_btn // 2)
+            draw_ribbon(gameboard, rx_ribbon, ry, rw_btn, rh_btn, assets.ribbon_sheet, rw=0)
+            cost_surf = assets.ui_font_small.render(f"{total_repair_all_cost} G", True, "black")
+            gameboard.blit(cost_surf, (rx_ribbon + (rw_btn // 2) - (cost_surf.get_width() // 2), ry + 6))
 
         if game_state == "GAME_OVER":
             draw_game_over_menu(gameboard, assets, current_minute, game_time)
@@ -974,13 +1116,9 @@ async def main():
         if assets.cursor_img:
             gameboard.blit(assets.cursor_img, (mouseX, mouseY))
 
-        # --- ESCALADO OPTIMIZADO PARA NAVEGADOR ---
-        screensize = screen.get_size()
-
-        # Smoothscale directo: buen rendimiento en web y sin píxeles amorfos
-        rescaled_gameboard = pygame.transform.smoothscale(gameboard, screensize)
-
-        screen.blit(rescaled_gameboard, (0, 0))
+            # --- ESCALADO NATIVO POR HARDWARE ---
+            # Cero distorsión, cero pérdida de rendimiento, cero chapuzas
+        screen.blit(gameboard, (0, 0))
 
         pygame.display.flip()
         dt = clock.tick(60) / 1000
@@ -1020,6 +1158,53 @@ async def main():
                         if t_obj:
                             t_max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_obj.tower_id, 1))] * hp_buff)
                             structures_hp[(r, c)] = min(t_max_hp,structures_hp[(r, c)] + (t_max_hp * struct_regen_factor))
+
+            # --- SISTEMA DE REPARACIÓN EN EL TIEMPO ---
+            finished_repairs = []
+            for coords, data in repairing_structures.items():
+                r, c = coords
+                data["anim_timer"] += dt * time_scale
+
+                if data["state"] == "repairing":
+                    # 1. Calculamos cuánto toca curar este frame
+                    heal_amount = data["rate"] * dt * time_scale
+
+                    # 2. No curamos más de lo que quedaba en el presupuesto
+                    if heal_amount > data["target_heal"]:
+                        heal_amount = data["target_heal"]
+
+                    structures_hp[coords] += heal_amount
+                    data["target_heal"] -= heal_amount
+
+                    # 3. Tope de seguridad por si interactúa con la regeneración pasiva y se pasa
+                    max_hp = 1
+                    hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+                    if data["type"] == wall:
+                        max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+                    else:
+                        t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
+                        if t_obj:
+                            max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_obj.tower_id, 1))] * hp_buff)
+
+                    if structures_hp[coords] >= max_hp:
+                        structures_hp[coords] = max_hp
+                        data["target_heal"] = 0 # Forzamos el fin si ha llegado al 100% de cualquier forma
+
+                    # 4. Comprobamos si el obrero ya ha terminado su cuota
+                    if data["target_heal"] <= 0:
+                        data["state"] = "cooldown"
+                        data["cd_timer"] = data["cd_time"]
+
+                elif data["state"] == "cooldown":
+                    data["cd_timer"] -= dt * time_scale
+                    if data["cd_timer"] <= 0:
+                        finished_repairs.append(coords)
+
+            for coords in finished_repairs:
+                del repairing_structures[coords]
+
+            if repair_all_cooldown > 0:
+                repair_all_cooldown -= dt * time_scale
 
             if len(spawn_schedule) > 0:
                 next_spawn_time, next_spawn_type = spawn_schedule[0]

@@ -60,7 +60,7 @@ def get_tile(sheet, x, y, width, height, scale_size):
     return pygame.transform.scale(image, (scale_size, scale_size))
 
 def draw_text_wrapped(surface, text, font, color, rect):
-    words = text.split(" ")
+    words = text.split()
     lines = []
     current_line = []
     for word in words:

@@ -1,7 +1,9 @@
 pygbag src
 
 
-## arreglado? todo animacion de muerte del generator es muy lenta. Bug animacion al generar quieto
+todo menu ajustes. Fuente legible. Traducción español. Usar settingsbg.png de fondo y hacer botones con la paleta de colores de las cartas.
+
+todo animacion de muerte del generator es muy lenta. Bug animacion al generar quieto
 
 todo bug visual monedas del cofre muy altas, hay que bajarlas un poco.
 
@@ -10,7 +12,8 @@ todo cooldown de reparar
 
 todo sistema de gemas
 todo sistema de pasivas
-todo ajustes
+
+todo smite tower
 todo el resto de bosses
 
-todo bug no se pueden romper las ruinas. quiza hacer queal construir junto a ruinas no se actualicen estas
+todo bug no se pueden romper las ruinas. quiza hacer que al construir junto a ruinas no se actualicen estas

@@ -38,7 +38,7 @@ TOWER_DESCRIPTIONS = {
         8: "Range, damage and firerate greatly increased."
     },
     "fireball": {
-        1: "High damage, low firerate. Projectiles explode dealing damage in an area.",
+        1: "Projectiles explode dealing high damage in an area.",
         2: "Damage increased.", 3: "Firerate increased. Area increased.",
         4: "Damage increased. Tower limit increased.", 5: "Range increased. Firerate increased.",
         6: "Damage increased. Area increased.", 7: "Tower limit increased.",
@@ -59,14 +59,14 @@ TOWER_DESCRIPTIONS = {
         8: "Range, damage and slow greatly increased."
     },
     "lightning": {
-        1: "High firerate, low damage. Projectiles bounce between enemies.",
+        1: "Projectiles bounce between close enemies.",
         2: "Damage increased.", 3: "Firerate increased. Bounce range increased.",
         4: "Bounces increased. Tower limit increased.", 5: "Damage increased.",
         6: "Bounces increased. Firerate increased.", 7: "Tower limit increased.",
         8: "Range, damage, firerate and bounces greatly increased."
     },
     "thorns": {
-        1: "Spawns a thorny patch under enemies that deals damage over time.",
+        1: "Spikes rise from the ground dealing damage over time in an area.",
         2: "Damage increased.", 3: "Patch area and maximum target limit increased.",
         4: "Damage and tower limit increased. Range slightly increased.",
         5: "Patch attack speed increased. Max target limit increased.",
