@@ -13,16 +13,24 @@ if not os.path.exists(config_file):
     }
     config["Settings"] = {
         "legible_font": "False",
-        "health_bars_mode": "0"
+        "health_bars_mode": "0",
+        "language": "en"
     }
     with open(config_file, "w") as f:
         config.write(f)
 else:
     config.read(config_file)
     if "Settings" not in config:
-        config["Settings"] = {"legible_font": "False", "health_bars_mode": "0"}
+        config["Settings"] = {"legible_font": "False", "health_bars_mode": "0", "language": "en"}
         with open(config_file, "w") as f:
             config.write(f)
+    else:
+        # Añadimos la comprobación específica para el idioma
+        if "language" not in config["Settings"]:
+            config["Settings"]["language"] = "en"
+            with open(config_file, "w") as f:
+                config.write(f)
+
     if "toggle_hp" not in config["Keybinds"]:
         config["Keybinds"]["toggle_hp"] = "v"
         with open(config_file, "w") as f:
@@ -30,6 +38,7 @@ else:
 
 use_legible_font = config.getboolean("Settings", "legible_font", fallback=False)
 health_bars_mode = config.getint("Settings", "health_bars_mode", fallback=0)
+language = config.get("Settings", "language", fallback="en")
 
 def get_key(key_str):
     try:

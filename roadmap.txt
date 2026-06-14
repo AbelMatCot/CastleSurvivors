@@ -17,3 +17,7 @@ todo smite tower
 todo el resto de bosses
 
 todo bug no se pueden romper las ruinas. quiza hacer que al construir junto a ruinas no se actualicen estas
+todo shift+w reconstruye las ruinas en muros
+
+
+todo cambiar motor grafico?

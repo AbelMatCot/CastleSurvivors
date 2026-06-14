@@ -4,6 +4,28 @@ import sys
 from graphics import extract_sprite
 from gamedata import wall_mask_map
 
+class ScaledFont:
+    def __init__(self, font_path, base_size, scale_factor):
+        self.font = pygame.font.Font(font_path, base_size)
+        self.scale_factor = scale_factor
+
+    def render(self, text, antialias, color, background=None):
+        # Renderizamos a su resolución nativa perfecta (y forzamos sin antialias por si acaso)
+        surf = self.font.render(text, False, color, background)
+        # Le metemos el estirón bruto
+        if self.scale_factor != 1:
+            new_w = surf.get_width() * self.scale_factor
+            new_h = surf.get_height() * self.scale_factor
+            surf = pygame.transform.scale(surf, (new_w, new_h))
+        return surf
+
+    def size(self, text):
+        w, h = self.font.size(text)
+        return (w * self.scale_factor, h * self.scale_factor)
+
+    def get_linesize(self):
+        return self.font.get_linesize() * self.scale_factor
+
 class GameAssets:
     def __init__(self):
         # Declaramos todo vacío primero
@@ -60,24 +82,24 @@ class GameAssets:
 
     def load_all(self, use_legible_font):
         # 1. Fuentes
+        font_path = os.path.join("Assets", "m5x7.ttf")
         if use_legible_font:
-            self.ui_font_large = pygame.font.SysFont("Tahoma", 28, bold=True)
-            self.ui_font_medium = pygame.font.SysFont("Tahoma", 20, bold=True)
-            self.ui_font_small = pygame.font.SysFont("Tahoma", 16, bold=True)
+            self.ui_font_small = pygame.font.Font(font_path, 16)
+            self.ui_font_medium = ScaledFont(font_path, 16, 2)
+            self.ui_font_large = ScaledFont(font_path, 16, 3)
         else:
-            font_path = os.path.join("Assets", "alagard.ttf")
             try:
-                self.ui_font_large = pygame.font.Font(font_path, 32)
-                self.ui_font_medium = pygame.font.Font(font_path, 22)
                 self.ui_font_small = pygame.font.Font(font_path, 16)
+                self.ui_font_medium = ScaledFont(font_path, 16, 2)
+                self.ui_font_large = ScaledFont(font_path, 16, 3)
             except FileNotFoundError:
-                print("Warning: Assets/alagard.ttf not found. Using Tahoma as fallback.")
+                print("Warning: Font not found. Using Tahoma as fallback.")
                 self.ui_font_large = pygame.font.SysFont("Tahoma", 28, bold=True)
                 self.ui_font_medium = pygame.font.SysFont("Tahoma", 20, bold=True)
                 self.ui_font_small = pygame.font.SysFont("Tahoma", 16, bold=True)
 
         # 2. Iconos y Torres UI
-        for tower_name in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
+        for tower_name in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns", "smite"]:
             img_path = os.path.join("Assets", "Sprites", "Player", f"{tower_name}tower.png")
             try:
                 raw_img = pygame.image.load(img_path).convert_alpha()
@@ -191,21 +213,29 @@ class GameAssets:
             self.bg_menu = pygame.Surface((1280, 720))
             self.bg_menu.fill("#222222")
 
-            # --- BOTONES DE VELOCIDAD ---
-            try:
-                speed_sheet = pygame.image.load(os.path.join("Assets", "UI", "speedup.png")).convert_alpha()
+        # --- BOTONES DE VELOCIDAD ---
+        try:
+            speed_sheet = pygame.image.load(os.path.join("Assets", "UI", "speedup.png")).convert_alpha()
 
-                icon_z = pygame.Surface((32, 32), pygame.SRCALPHA)
-                icon_z.blit(speed_sheet, (0, 0), (0, 0, 32, 32))
+            icon_z = pygame.Surface((32, 32), pygame.SRCALPHA)
+            icon_z.blit(speed_sheet, (0, 0), (0, 0, 32, 32))
 
-                icon_x = pygame.Surface((32, 32), pygame.SRCALPHA)
-                icon_x.blit(speed_sheet, (0, 0), (32, 0, 32, 32))
+            icon_x = pygame.Surface((32, 32), pygame.SRCALPHA)
+            icon_x.blit(speed_sheet, (0, 0), (32, 0, 32, 32))
 
-                # Los metemos en el diccionario de torres para engañar a draw_slot
-                self.ui_tower_icons["speed_z"] = pygame.transform.scale(icon_z, (28, 28))
-                self.ui_tower_icons["speed_x"] = pygame.transform.scale(icon_x, (28, 28))
-            except FileNotFoundError:
-                print("Warning: speedup.png not found.")
+            # Los metemos en el diccionario de torres para engañar a draw_slot
+            self.ui_tower_icons["speed_z"] = pygame.transform.scale(icon_z, (28, 28))
+            self.ui_tower_icons["speed_x"] = pygame.transform.scale(icon_x, (28, 28))
+        except FileNotFoundError:
+            print("Warning: speedup.png not found.")
+
+        # --- ICONOS DE IDIOMA ---
+        try:
+            self.lang_icon = pygame.image.load(os.path.join("Assets", "Language", "lang.png")).convert_alpha()
+            self.en_icon = pygame.image.load(os.path.join("Assets", "Language", "en.png")).convert_alpha()
+            self.es_icon = pygame.image.load(os.path.join("Assets", "Language", "es.png")).convert_alpha()
+        except FileNotFoundError as e:
+            print(f"ERROR: Image {e} not found.")
 
         # 7. Cartas y Stats
         try:
@@ -221,7 +251,7 @@ class GameAssets:
             "damage": "dmg", "firerate": "rate", "range": "range", "health": "hp",
             "regen": "regen", "armor": "armor", "counter": "counter", "gold": "gold",
             "xp": "xp", "crit": "crit",
-            "heal": "heal", "gold_100": "goldbag", "gems": "gems"
+            "heal": "heal", "goldbag": "goldbag", "gems": "gems"
         }
         stats_path = os.path.join("Assets", "Sprites", "Stats")
 

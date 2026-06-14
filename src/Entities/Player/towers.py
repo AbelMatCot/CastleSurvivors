@@ -13,6 +13,10 @@ try:
     thorns_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "spikes.png"))
 except FileNotFoundError:
     thorns_sheet = None
+try:
+    smite_sheet = pygame.image.load(os.path.join("Assets", "Sprites", "Effects", "smite.png"))
+except FileNotFoundError:
+    smite_sheet = None
 
 # Diccionario maestro de estadísticas basado en el PDF (Actualizado y Limpio)
 TOWER_STATS = {
@@ -75,6 +79,16 @@ TOWER_STATS = {
         6: {"cost": 115, "limit": 3, "range": 80, "damage": 10, "cd": 1.5, "proj": 1, "area": 25, "pierce": 5},
         7: {"cost": 153, "limit": 4, "range": 80, "damage": 10, "cd": 1.5, "proj": 1, "area": 25, "pierce": 5},
         8: {"cost": 397, "limit": 4, "range": 100, "damage": 14, "cd": 1.2, "proj": 1, "area": 30, "pierce": 5},
+    },
+    "smite": {
+        1: {"cost": 30, "limit": 2, "range": 75, "damage": 13, "cd": 2.0, "proj": 1, "area": 15, "pierce": 1},
+        2: {"cost": 34, "limit": 2, "range": 75, "damage": 13, "cd": 1.8, "proj": 1, "area": 15, "pierce": 1},
+        3: {"cost": 45, "limit": 2, "range": 75, "damage": 21, "cd": 1.8, "proj": 1, "area": 15, "pierce": 1},
+        4: {"cost": 63, "limit": 3, "range": 75, "damage": 21, "cd": 1.8, "proj": 1, "area": 20, "pierce": 1},
+        5: {"cost": 89, "limit": 3, "range": 85, "damage": 21, "cd": 1.5, "proj": 1, "area": 20, "pierce": 1},
+        6: {"cost": 123, "limit": 3, "range": 85, "damage": 33, "cd": 1.5, "proj": 1, "area": 20, "pierce": 1},
+        7: {"cost": 163, "limit": 4, "range": 85, "damage": 33, "cd": 1.5, "proj": 1, "area": 20, "pierce": 1},
+        8: {"cost": 423, "limit": 4, "range": 90, "damage": 48, "cd": 1.1, "proj": 1, "area": 25, "pierce": 1},
     },
 }
 
@@ -439,3 +453,61 @@ class ThornsTower(Tower):
     def fire_instant(self, enemy, stats, enemy_group, bullet_group):
         thorns = ThornsArea(enemy.pos.x, enemy.pos.y, stats, enemy_group)
         bullet_group.add(thorns)
+
+class SmiteArea(pygame.sprite.Sprite):
+    def __init__(self, x, y, stats, enemy_group):
+        super().__init__()
+        self.stats = stats
+        self.enemy_group = enemy_group
+        # Escalamos el radio para que se vea bien en el grid, como en la bola de fuego
+        self.radius = stats.get("area", 15) * 2.5
+        self.max_size = int(self.radius * 2)
+
+        self.frames = []
+        if smite_sheet:
+            frame_size = 128
+            for row in range(3):
+                for col in range(5):
+                    f = pygame.Surface((frame_size, frame_size), pygame.SRCALPHA)
+                    f.blit(smite_sheet, (0, 0), (col * frame_size, row * frame_size, frame_size, frame_size))
+                    self.frames.append(pygame.transform.scale(f, (self.max_size, self.max_size)))
+        else:
+            surf = pygame.Surface((self.max_size, self.max_size), pygame.SRCALPHA)
+            surf.fill((255, 255, 0, 150))
+            self.frames = [surf] * 15
+
+        self.current_frame = 0
+        self.image = self.frames[0]
+        self.rect = self.image.get_rect(center=(x, y - 15))
+        self.x = x
+        self.y = y
+        self.anim_timer = 0.0
+        self.damage_dealt = False
+
+    def update(self, dt):
+        self.anim_timer += dt
+        if self.anim_timer >= 0.04:  # Velocidad de la animación
+            self.anim_timer = 0.0
+            self.current_frame += 1
+
+            # El ataque hace daño exactamente en el frame 5 (índice 4)
+            if self.current_frame == 4 and not self.damage_dealt:
+                damage = self.stats.get("damage", 13)
+                for e in self.enemy_group:
+                    if e.alive() and pygame.math.Vector2(self.x, self.y).distance_to(e.pos) <= self.radius:
+                        e.take_damage(damage)
+                self.damage_dealt = True
+
+            if self.current_frame >= len(self.frames):
+                self.kill()
+            else:
+                self.image = self.frames[self.current_frame]
+
+
+class SmiteTower(Tower):
+    def __init__(self, x, y, is_castle=False):
+        super().__init__(x, y, "smite", None, color="yellow", is_castle=is_castle)
+
+    def fire_instant(self, enemy, stats, enemy_group, bullet_group):
+        smite = SmiteArea(enemy.pos.x, enemy.pos.y, stats, enemy_group)
+        bullet_group.add(smite)

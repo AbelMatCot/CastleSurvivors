@@ -1,3 +1,5 @@
+GAME_VERSION = "0.8.5"
+
 # =====================================================================
 # VALORES DE LA CUADRÍCULA (GRID) Y DIMENSIONES
 # =====================================================================
@@ -26,52 +28,79 @@ COUNTER_VALUES = [0, 2, 4, 7, 10]
 
 UI_TOWER_NAMES = {
     "arrow": "Archer Tower", "fireball": "Fireball", "kunai": "Kunai Volley",
-    "laser": "Ice Beam", "lightning": "Chain Lightning", "thorns": "Thorns Ground"
+    "laser": "Ice Beam", "lightning": "Chain Lightning", "thorns": "Spikes Ground","smite": "Holy Smite"
 }
 
 TOWER_DESCRIPTIONS = {
     "arrow": {
         1: "High range and firerate. Arrows can penetrate enemies at higher levels.",
-        2: "Damage increased.", 3: "Firerate increased. Tower limit increased.",
-        4: "Now arrows can penetrate one enemy.", 5: "Damage increased. Tower limit increased.",
-        6: "Firerate increased.", 7: "Arrows can penetrate two enemies. Tower limit increased.",
+        2: "Damage increased.",
+        3: "Firerate and tower limit increased.",
+        4: "Now arrows can penetrate one enemy.",
+        5: "Damage and tower limit increased.",
+        6: "Firerate increased.",
+        7: "Arrows can penetrate two enemies. Tower limit increased.",
         8: "Range, damage and firerate greatly increased."
     },
     "fireball": {
         1: "Projectiles explode dealing high damage in an area.",
-        2: "Damage increased.", 3: "Firerate increased. Area increased.",
-        4: "Damage increased. Tower limit increased.", 5: "Range increased. Firerate increased.",
-        6: "Damage increased. Area increased.", 7: "Tower limit increased.",
+        2: "Damage increased.",
+        3: "Firerate and area increased.",
+        4: "Damage and tower limit increased.",
+        5: "Range and firerate increased.",
+        6: "Damage and area increased.",
+        7: "Tower limit increased.",
         8: "Range, damage, firerate and area greatly increased."
     },
     "kunai": {
         1: "High firerate. Shoots multiple projectiles at higher levels.",
-        2: "Firerate increased.", 3: "Number of projectiles increased.",
-        4: "Damage increased. Tower limit increased.", 5: "Number of projectiles increased.",
-        6: "Range increased. Firerate increased.", 7: "Tower limit increased.",
+        2: "Firerate increased.",
+        3: "Number of projectiles increased.",
+        4: "Damage and Tower limit increased.",
+        5: "Number of projectiles increased.",
+        6: "Range and firerate increased.",
+        7: "Tower limit increased.",
         8: "Range, damage, firerate and number of projectiles greatly increased."
     },
     "laser": {
         1: "Low damage, but slows enemies down.",
-        2: "Damage increased.", 3: "Range increased. Slow increased.",
-        4: "Damage increased. Tower limit increased.", 5: "Range increased. Slow increased.",
-        6: "Damage increased.", 7: "Tower limit increased.",
+        2: "Damage increased.",
+        3: "Range and slow increased.",
+        4: "Damage and tower limit increased.",
+        5: "Range and slow increased.",
+        6: "Damage increased.",
+        7: "Tower limit increased.",
         8: "Range, damage and slow greatly increased."
     },
     "lightning": {
         1: "Projectiles bounce between close enemies.",
-        2: "Damage increased.", 3: "Firerate increased. Bounce range increased.",
-        4: "Bounces increased. Tower limit increased.", 5: "Damage increased.",
-        6: "Bounces increased. Firerate increased.", 7: "Tower limit increased.",
+        2: "Damage increased.",
+        3: "Firerate and bounce range increased.",
+        4: "Bounces and tower limit increased.",
+        5: "Damage increased.",
+        6: "Bounces and firerate increased.",
+        7: "Tower limit increased.",
         8: "Range, damage, firerate and bounces greatly increased."
     },
     "thorns": {
         1: "Spikes rise from the ground dealing damage over time in an area.",
-        2: "Damage increased.", 3: "Patch area and maximum target limit increased.",
-        4: "Damage and tower limit increased. Range slightly increased.",
-        5: "Patch attack speed increased. Max target limit increased.",
-        6: "Damage and patch area increased.", 7: "Range and tower limit increased. Max target limit increased.",
-        8: "High damage, large area and extremely fast tick rate."
+        2: "Damage increased.",
+        3: "Spikes' spawn rate increased.",
+        4: "Damage and tower limit increased.",
+        5: "Range and area of effect increased.",
+        6: "Spikes' spawn rate increased.",
+        7: "Tower limit increased.",
+        8: "Range, damage, spawn rate and area of effect greatly increased."
+    },
+    "smite": {
+        1: "Low firerate, high damage. Summons a holy hammer that deals damage in an area",
+        2: "Firerate increased.",
+        3: "Damage increased.",
+        4: "Area and tower limit increased.",
+        5: "Range and firerate increased.",
+        6: "Damage increased.",
+        7: "Tower limit increased.",
+        8: "Range, damage, firerate and area greatly increased."
     }
 }
 
@@ -87,7 +116,7 @@ PASSIVE_DESCRIPTIONS = {
     "xp": "Increases experience earned from enemies by 5% per level.",
     "crit": "10% chance per level to deal 150% damage.",
     "heal": "Restores 20% of your Castle's maximum health.",
-    "gold_100": "Adds 100 gold to your current stash.",
+    "goldbag": "Adds 100 gold to your current stash.",
     "gems_5": "Grants 5 extra gems for permanent upgrades."
 }
 

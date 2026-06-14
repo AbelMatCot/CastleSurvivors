@@ -4,6 +4,7 @@ from Entities.spawn import Spawn
 from Entities.effects import Effect
 from gamedata import UI_TOWER_NAMES, TOWER_DESCRIPTIONS, PASSIVE_DESCRIPTIONS
 
+
 def get_valid_border(spawn_type, forced_initial_spawns, spawn_counts):
     if spawn_type == "wildcard":
         return random.choice(["North", "South", "East", "West"])
@@ -15,6 +16,7 @@ def get_valid_border(spawn_type, forced_initial_spawns, spawn_counts):
         if not valid_borders:
             valid_borders = ["North", "South", "East", "West"]
         return random.choice(valid_borders)
+
 
 def setup_spawn_point(spwn_grp, effects_group, grid, spawn_type, forced_initial_spawns, spawn_counts, existing_spawns_pos, assets):
     side = get_valid_border(spawn_type, forced_initial_spawns, spawn_counts)
@@ -69,29 +71,36 @@ def setup_spawn_point(spwn_grp, effects_group, grid, spawn_type, forced_initial_
         dust = Effect(fx_base + ox, fy_base + oy, assets.dust_sheet, scale_size=70, fps=11, delay=dly)
         effects_group.add(dust)
 
-def get_level_up_cards(player_level, active_towers, tower_levels, active_passives, passive_levels):
-    # 1. Definimos las cartas de relleno UNA SOLA VEZ y para siempre
+
+# ¡OJO AL NUEVO PARÁMETRO 'lang' AL FINAL!
+def get_level_up_cards(player_level, active_towers, tower_levels, active_passives, passive_levels, lang):
     fallback_cards = [
-        {"title": "Heal Castle", "desc": PASSIVE_DESCRIPTIONS["heal"], "type": "heal", "id": "heal", "lvl": 8},
-        {"title": "Gold Bag", "desc": PASSIVE_DESCRIPTIONS["gold_100"], "type": "gold", "id": "gold_100", "lvl": 8},
-        {"title": "Gems", "desc": PASSIVE_DESCRIPTIONS["gems_5"], "type": "gems_5", "id": "gems", "lvl": 8}
+        {"title": lang.get("card_heal_title", "Heal Castle"), "desc": lang.get("passive_desc_heal",
+                                                                               PASSIVE_DESCRIPTIONS[
+                                                                                   "heal"]), "type": "heal", "id": "heal", "lvl": 8},
+        {"title": lang.get("card_gold_title", "Gold Bag"), "desc": lang.get("passive_desc_goldbag",
+                                                                            PASSIVE_DESCRIPTIONS[
+                                                                                "goldbag"]), "type": "gold", "id": "goldbag", "lvl": 8},
+        {"title": lang.get("card_gems_title", "Gems"), "desc": lang.get("passive_desc_gems_5", PASSIVE_DESCRIPTIONS[
+            "gems_5"]), "type": "gems_5", "id": "gems", "lvl": 8}
     ]
 
-    # 2. Si pasas del nivel 50, te comes el relleno entero
     if player_level > 50:
         return fallback_cards
 
     pool = []
     has_free_slot = None in active_towers
 
-    for t_id in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
+    for t_id in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns", "smite"]:
         lvl = tower_levels[t_id]
-        name = UI_TOWER_NAMES[t_id]
+        name = lang.get(f"tower_name_{t_id}", UI_TOWER_NAMES[t_id])
         if lvl == 0:
             if has_free_slot:
-                pool.append({"title": name, "desc": TOWER_DESCRIPTIONS[t_id][1], "type": "upgrade_tower", "id": t_id, "lvl": 1})
+                desc = lang.get(f"tower_desc_{t_id}_1", TOWER_DESCRIPTIONS[t_id][1])
+                pool.append({"title": name, "desc": desc, "type": "upgrade_tower", "id": t_id, "lvl": 1})
         elif lvl < 8:
-            pool.append({"title": name, "desc": TOWER_DESCRIPTIONS[t_id][lvl + 1], "type": "upgrade_tower", "id": t_id, "lvl": lvl + 1})
+            desc = lang.get(f"tower_desc_{t_id}_{lvl + 1}", TOWER_DESCRIPTIONS[t_id][lvl + 1])
+            pool.append({"title": name, "desc": desc, "type": "upgrade_tower", "id": t_id, "lvl": lvl + 1})
 
     passive_names = {
         "damage": "Damage", "firerate": "Firerate", "range": "Range/Area",
@@ -100,17 +109,19 @@ def get_level_up_cards(player_level, active_towers, tower_levels, active_passive
     }
 
     for p_id, lvl in passive_levels.items():
+        name = lang.get(f"passive_name_{p_id}", passive_names.get(p_id, ""))
+        desc = lang.get(f"passive_desc_{p_id}", PASSIVE_DESCRIPTIONS.get(p_id, ""))
+
         if lvl == 0:
             if len(active_passives) < 6:
-                pool.append({"title": passive_names[p_id], "desc": PASSIVE_DESCRIPTIONS[p_id], "type": "unlock_passive", "id": p_id, "lvl": 1})
+                pool.append({"title": name, "desc": desc, "type": "unlock_passive", "id": p_id, "lvl": 1})
         elif lvl < 4:
-            pool.append({"title": passive_names[p_id], "desc": PASSIVE_DESCRIPTIONS[p_id], "type": "upgrade_passive", "id": p_id, "lvl": lvl + 1})
+            pool.append({"title": name, "desc": desc, "type": "upgrade_passive", "id": p_id, "lvl": lvl + 1})
 
     random.shuffle(pool)
     cards = pool[:3]
 
-    # 3. Si no hay suficientes mejoras en la pool (porque lo has maxeado todo antes del 50), rellenamos hasta tener 3
-    while len(cards) < 3:
-        cards.append(random.choice(fallback_cards))
+    if len(cards) == 0:
+        return fallback_cards
 
     return cards

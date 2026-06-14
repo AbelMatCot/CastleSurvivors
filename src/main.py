@@ -3,17 +3,64 @@ import random
 import os
 import sys
 import asyncio
+import json
+
 try:
     import ctypes
+
     ctypes.windll.user32.SetProcessDPIAware()
 except:
     pass
 
-from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, LightningTower, ThornsTower, TOWER_STATS
-from Entities.effects import Effect, TowerSmoke
+# =====================================================================
+# SISTEMA DE IDIOMAS (i18n)
+# =====================================================================
+lang = {}
+
+
+def load_language(lang_code="en"):
+    global lang
+    # Textos por defecto en código (fallback a prueba de bombas)
+    lang = {
+        "castle_archer": "Archer Castle",
+        "castle_fire": "Fire Castle",
+        "castle_kunai": "Kunai Castle",
+        "castle_laser": "Laser Castle",
+        "castle_lightning": "Lightning Castle",
+        "castle_thorns": "Thorns Castle",
+        "btn_menu": "Menu",
+        "btn_demolish": "Demolish",
+        "btn_repair": "Repair",
+        "btn_repair_all": "Repair All",
+        "btn_restart": "Restart",
+        "btn_yes": "Yes",
+        "btn_no": "No",
+        "text_are_you_sure": "Are you sure?",
+        "text_max_hp": "Max HP",
+        "text_repairing": "repairing",
+        "ui_hp": "HP",
+        "ui_lvl": "Lvl",
+        "text_choose_language": "Choose language"
+    }
+
+    try:
+        lang_path = os.path.join("Assets", "Language", f"{lang_code}.json")
+        if os.path.exists(lang_path):
+            with open(lang_path, "r", encoding="utf-8") as f:
+                loaded_lang = json.load(f)
+                lang.update(loaded_lang)
+                print(f"Idioma '{lang_code}' cargado.")
+    except Exception as e:
+        print(f"Error cargando {lang_code}.json: {e}")
+
+
+import settings
+load_language(settings.language)
+
+from Entities.Player.towers import *
+from Entities.effects import *
 from gamedata import *
 from graphics import *
-import settings
 
 from map_manager import get_tile_for_cell, update_ruin_masks, update_wall_masks, update_neighbors_walls, generate_initial_grid
 from Entities.spawn import setup_spawn_point
@@ -34,6 +81,7 @@ clock = pygame.time.Clock()
 running = True
 
 from assets import core_assets as assets
+
 assets.load_all(settings.use_legible_font)
 
 pygame.mouse.set_visible(False)
@@ -97,6 +145,27 @@ next_boss_time = 150.0
 bosses_spawned = 0
 
 
+def get_line_cells(r1, c1, r2, c2):
+    cells = []
+    dr = abs(r2 - r1)
+    dc = abs(c2 - c1)
+    sr = 1 if r1 < r2 else -1
+    sc = 1 if c1 < c2 else -1
+    err = dc - dr
+    while True:
+        cells.append((r1, c1))
+        if r1 == r2 and c1 == c2:
+            break
+        e2 = 2 * err
+        if e2 > -dr:
+            err -= dr
+            c1 += sc
+        if e2 < dc:
+            err += dc
+            r1 += sr
+    return cells
+
+
 def reset_game(starting_tower="arrow"):
     global castle_obj, current_tool, unlocked_towers, active_towers
     global level_up_options, card_rects, pause_rects, main_menu_rects
@@ -118,10 +187,11 @@ def reset_game(starting_tower="arrow"):
     chest_group.empty()
     effects_group.empty()
 
-    from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, LightningTower, ThornsTower
+    from Entities.Player.towers import ArrowTower, FireballTower, KunaiTower, LaserTower, LightningTower, ThornsTower, SmiteTower
     tower_classes = {
         "arrow": ArrowTower, "fireball": FireballTower, "kunai": KunaiTower,
-        "laser": LaserTower, "lightning": LightningTower, "thorns": ThornsTower
+        "laser": LaserTower, "lightning": LightningTower, "thorns": ThornsTower,
+        "smite": SmiteTower
     }
 
     castle_obj = tower_classes[starting_tower](640, 360, is_castle=True)
@@ -151,7 +221,7 @@ def reset_game(starting_tower="arrow"):
     damage_timers = {}
     previous_structures_types = {}
 
-    tower_levels = {"arrow": 0, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0}
+    tower_levels = {"arrow": 0, "fireball": 0, "kunai": 0, "laser": 0, "lightning": 0, "thorns": 0, "smite": 0}
     tower_levels[starting_tower] = 1
 
     active_passives = []
@@ -186,23 +256,27 @@ def reset_game(starting_tower="arrow"):
     current_minute = 0
     difficulty_multiplier = 1.0
     time_scale = 1.0
-    
+
     next_boss_time = 150.0
     bosses_spawned = 0
 
+
+def get_castle_cards(lang):
+    return [
+        {
+            "title": lang.get(f"tower_name_{t_id}", UI_TOWER_NAMES[t_id]),
+            "desc": lang.get(f"tower_desc_{t_id}_1", TOWER_DESCRIPTIONS[t_id][1]),
+            "type": t_id,
+            "id": t_id,
+            "lvl": 1
+        }
+        for t_id in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns","smite"]
+    ]
+
+
 # Inicializamos la primera partida al abrir el juego
 reset_game()
-
 menu_offset_y = 0
-castle_options = [
-    {"title": "Archer Castle", "desc": TOWER_DESCRIPTIONS["arrow"][1], "type": "arrow", "id": "arrow"},
-    {"title": "Fire Castle", "desc": TOWER_DESCRIPTIONS["fireball"][1], "type": "fireball", "id": "fireball"},
-    {"title": "Kunai Castle", "desc": TOWER_DESCRIPTIONS["kunai"][1], "type": "kunai", "id": "kunai"},
-    {"title": "Laser Castle", "desc": TOWER_DESCRIPTIONS["laser"][1], "type": "laser", "id": "laser"},
-    {"title": "Lightning Castle", "desc": TOWER_DESCRIPTIONS["lightning"][1], "type": "lightning", "id": "lightning"},
-    {"title": "Thorns Castle", "desc": TOWER_DESCRIPTIONS["thorns"][1], "type": "thorns", "id": "thorns"}
-]
-
 # =====================================================================
 # BUCLE PRINCIPAL
 # =====================================================================
@@ -214,6 +288,8 @@ async def main():
     global difficulty_multiplier, next_boss_time, bosses_spawned, previous_structures_hp
     global previous_structures_types, level_up_options, player_xp, player_level, xp_to_next_level
     global repairing_structures, repair_all_cooldown
+    global lang_rects
+    drag_start_cell = None
 
     while running:
         keys = pygame.key.get_pressed()
@@ -237,12 +313,6 @@ async def main():
         elif is_z_pressed:
             time_scale = 2.0
 
-
-        physical_mouseX, physical_mouseY = pygame.mouse.get_pos()
-        current_w, current_h = screen.get_size()
-        mouseX = int((physical_mouseX / max(1, current_w)) * 1280)
-        mouseY = int((physical_mouseY / max(1, current_h)) * 720)
-
         limitW = offsetX + (margin * grid_size)
         limitE = offsetX + (col - margin) * grid_size
         limitN = margin * grid_size
@@ -262,22 +332,30 @@ async def main():
 
             if event.type == pygame.MOUSEBUTTONDOWN:
 
+                # --- NUEVO: Click Derecho para cancelar ---
+                if event.button == 3:
+                    if drag_start_cell is not None:
+                        drag_start_cell = None
+                    elif current_tool is not None:
+                        current_tool = None
+                    continue
+
                 # --- 1. MENÚS DE CARTAS ---
                 if game_state in ["LEVEL_UP", "CASTLE_SELECT"]:
                     for i, rect in enumerate(card_rects):
                         if rect.collidepoint(mouseX, mouseY):
                             # Segundo clic (Confirmar)
                             if selected_card_idx == i:
+                                chosen = level_up_options[i]
+
                                 if game_state == "CASTLE_SELECT":
-                                    chosen_tower = castle_options[i]["id"]
+                                    chosen_tower = chosen["id"]
                                     reset_game(starting_tower=chosen_tower)
                                     game_state = "PLAYING"
                                     selected_card_idx = None
                                     break
 
                                 # Si no es CASTLE_SELECT, sigue con LEVEL_UP normal
-                                chosen = level_up_options[i]
-
                                 if chosen["type"] == "upgrade_tower":
                                     t_id = chosen["id"]
                                     old_lvl = tower_levels[t_id]
@@ -330,15 +408,15 @@ async def main():
                                             elif cell == turret:
                                                 t_obj = next((t for t in player_group if
                                                               not getattr(t, "is_castle", False) and int((
-                                                                                                                     t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
+                                                                                                                 t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
                                                 if t_obj:
                                                     t_id = t_obj.tower_id
                                                     lvl = max(1, tower_levels.get(t_id, 1))
                                                     old_max = int(TOWER_BASE_HP[lvl] * old_hp_buff)
-                                                    new_max = int(TOWER_BASE_HP[lvl] * new_hp_buff)
+                                                    new_max = int(TOWER_BASE_HP[lvl] * old_hp_buff)
                                                     structures_hp[coords] += (new_max - old_max)
 
-                                elif chosen["type"] == "gold_100":
+                                elif chosen["type"] == "goldbag" or chosen["type"] == "gold_100":
                                     player_gold += 100
                                 elif chosen["type"] == "heal":
                                     castle_hp = min(castle_max_hp, castle_hp + int(castle_max_hp * 0.2))
@@ -448,7 +526,9 @@ async def main():
                                         max_hp = int((25 + (player_level * 1.5)) * hp_buff)
                                         total_value = min(50, 10 + int(player_level * 0.8))
                                     else:
-                                        target_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == hoverCol and int(t.y // grid_size) == hoverRow), None)
+                                        target_obj = next((t for t in player_group if
+                                                           not getattr(t, "is_castle", False) and int((
+                                                                                                              t.x - offsetX) // grid_size) == hoverCol and int(t.y // grid_size) == hoverRow), None)
                                         if target_obj:
                                             t_id = target_obj.tower_id
                                             max_hp = int(TOWER_BASE_HP[max(1, tower_levels[t_id])] * hp_buff)
@@ -476,22 +556,10 @@ async def main():
                             hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
 
                             if current_tool == "wall":
-                                current_wall_cost = min(50, 10 + int(player_level * 0.8))
-                                if player_gold >= current_wall_cost:
-                                    player_gold -= current_wall_cost
-                                    grid[hoverRow][hoverCol] = wall
-                                    structures_hp[(hoverRow, hoverCol)] = int((25 + (player_level * 1.5)) * hp_buff)
+                                # Solo anclamos el inicio, no se construye inmediatamente
+                                drag_start_cell = (hoverRow, hoverCol)
 
-                                    if (hoverRow, hoverCol) in ruin_masks:
-                                        del ruin_masks[(hoverRow, hoverCol)]
-
-                                    update_neighbors_walls(hoverRow, hoverCol, grid, wall_masks, ruin_masks)
-
-                                    posX_px = offsetX + (hoverCol * grid_size) + (grid_size // 2)
-                                    posY_px = (hoverRow * grid_size) + (grid_size // 2)
-                                    effects_group.add(Effect(posX_px, posY_px, assets.dust_sheet, scale_size=55, fps=11))
-
-                            elif current_tool in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns"]:
+                            elif current_tool in ["arrow", "fireball", "kunai", "laser", "lightning", "thorns", "smite"]:
                                 lvl = tower_levels[current_tool]
                                 stats = TOWER_STATS[current_tool][max(1, lvl)]
                                 current_count = sum(1 for t in player_group if
@@ -520,6 +588,8 @@ async def main():
                                             player_group.add(LightningTower(posX_px, posY_px))
                                         elif current_tool == "thorns":
                                             player_group.add(ThornsTower(posX_px, posY_px))
+                                        elif current_tool == "smite":
+                                            player_group.add(SmiteTower(posX_px, posY_px))
 
                                         base_y = (hoverRow * grid_size) + grid_size
                                         effects_group.add(TowerSmoke(posX_px, base_y, assets.smoke_sheet, goes_right=False))
@@ -528,6 +598,48 @@ async def main():
                                         last_built_cell = (hoverRow, hoverCol)
 
             if event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1 and game_state == "PLAYING" and drag_start_cell is not None:
+                    # --- CONSTRUCCIÓN DE LA LÍNEA DE MUROS AL SOLTAR ---
+                    # Limitamos el arrastre a los márgenes del mapa jugable
+                    drag_r = min(max(mouseY // grid_size, margin), row - margin - 1)
+                    drag_c = min(max((mouseX - offsetX) // grid_size, margin), col - margin - 1)
+
+                    # Forzamos línea recta
+                    if abs(drag_r - drag_start_cell[0]) > abs(drag_c - drag_start_cell[1]):
+                        drag_c = drag_start_cell[1]
+                    else:
+                        drag_r = drag_start_cell[0]
+
+                    line_cells = get_line_cells(drag_start_cell[0], drag_start_cell[1], drag_r, drag_c)
+
+                    # Filtramos los que caen en terreno inválido
+                    valid_cells = [cell for cell in line_cells if
+                                   0 <= cell[0] < row and 0 <= cell[1] < col and grid[cell[0]][cell[1]] == allow]
+
+                    current_wall_cost = min(50, 10 + int(player_level * 0.8))
+                    total_cost = len(valid_cells) * current_wall_cost
+
+                    if player_gold >= total_cost and len(valid_cells) > 0:
+                        player_gold -= total_cost
+                        hp_buff = 1.0 + (passive_levels.get("health", 0) * 0.05) + meta_health
+                        wall_max_hp = int((25 + (player_level * 1.5)) * hp_buff)
+
+                        for r, c in valid_cells:
+                            grid[r][c] = wall
+                            structures_hp[(r, c)] = wall_max_hp
+                            if (r, c) in ruin_masks:
+                                del ruin_masks[(r, c)]
+
+                            posX_px = offsetX + (c * grid_size) + (grid_size // 2)
+                            posY_px = (r * grid_size) + (grid_size // 2)
+                            effects_group.add(Effect(posX_px, posY_px, assets.dust_sheet, scale_size=55, fps=11))
+
+                        # Actualizamos las conexiones para que queden bonitos todos de golpe
+                        for r, c in valid_cells:
+                            update_neighbors_walls(r, c, grid, wall_masks, ruin_masks)
+
+                    drag_start_cell = None
+
                 if game_state == "MAIN_MENU":
                     for rect, opt in main_menu_rects:
                         if rect.collidepoint(mouseX, mouseY):
@@ -536,10 +648,24 @@ async def main():
                             elif opt == "Settings":
                                 settings.use_legible_font = not settings.use_legible_font
                                 assets.load_all(settings.use_legible_font)
+                            elif opt == "Language":
+                                game_state = "LANGUAGE_SELECT"
                             elif opt == "Exit":
                                 running = False
                             else:
                                 print(f"You clicked {opt}. It is still a work in progress, patience.")
+                elif game_state == "LANGUAGE_SELECT":
+                    for rect, code in lang_rects:
+                        if rect.collidepoint(mouseX, mouseY):
+                            load_language(code)
+                            # Guardar en config.ini
+                            settings.config["Settings"]["language"] = code
+                            with open(settings.config_file, "w") as f:
+                                settings.config.write(f)
+                            settings.language = code
+
+                            game_state = "MAIN_MENU"
+
                 elif game_state == "PAUSED":
                     if confirm_action:
                         yes_rect = pygame.Rect(640 - 120, 360, 100, 50)
@@ -547,6 +673,7 @@ async def main():
                         if yes_rect.collidepoint(mouseX, mouseY):
                             if confirm_action == "Restart":
                                 reset_game()
+                                level_up_options = get_castle_cards(lang)
                                 game_state = "CASTLE_SELECT"
                             elif confirm_action == "Main Menu":
                                 reset_game()
@@ -570,6 +697,7 @@ async def main():
                     quit_rect = pygame.Rect(640 + 20, 500, 200, 50)
                     if restart_rect.collidepoint(mouseX, mouseY):
                         reset_game()
+                        level_up_options = get_castle_cards(lang)
                         game_state = "CASTLE_SELECT"
                     elif quit_rect.collidepoint(mouseX, mouseY):
                         reset_game()
@@ -580,6 +708,7 @@ async def main():
                     if event.key == pygame.K_g:
                         show_grid = not show_grid
                     elif event.key == pygame.K_ESCAPE:
+                        drag_start_cell = None
                         if current_tool is not None:
                             current_tool = None
                         else:
@@ -589,6 +718,7 @@ async def main():
                     elif event.key == settings.controls["repair"]:
                         current_tool = "repair" if current_tool != "repair" else None
                     elif event.key == settings.controls["wall"]:
+                        drag_start_cell = None
                         current_tool = "wall" if current_tool != "wall" else None
                     elif event.key == settings.controls["slot_1"] and active_towers[0]:
                         t = active_towers[0]
@@ -610,7 +740,7 @@ async def main():
                 elif game_state == "PAUSED":
                     if event.key == pygame.K_ESCAPE:
                         game_state = "PLAYING"
-                elif game_state == "CASTLE_SELECT":
+                elif game_state in ["CASTLE_SELECT", "LANGUAGE_SELECT"]:
                     if event.key == pygame.K_ESCAPE:
                         game_state = "MAIN_MENU"
 
@@ -713,43 +843,94 @@ async def main():
         effects_group.draw(gameboard)
         chest_group.draw(gameboard)
 
-        if on_grid and game_state == "PLAYING" and last_built_cell != (hoverRow, hoverCol):
-            posX_trans = offsetX + (hoverCol * grid_size)
-            posY_trans = hoverRow * grid_size
-            current_cell = grid[hoverRow][hoverCol]
+        if game_state == "PLAYING":
+            if current_tool == "wall" and drag_start_cell is not None:
+                # --- PREVISUALIZACIÓN DE LA LÍNEA DE MUROS ---
+                # Limitamos el holograma a los márgenes del mapa
+                drag_r = min(max(mouseY // grid_size, margin), row - margin - 1)
+                drag_c = min(max((mouseX - offsetX) // grid_size, margin), col - margin - 1)
 
-            if current_tool in assets.preview_towers:
-                tower_img = assets.preview_towers[current_tool].copy()
-
-                if current_tool == "wall":
-                    can_build = (current_cell == allow) and (player_gold >= min(50, 10 + int(player_level * 0.8)))
-                    shift_y = 0
-                    limit_text = None
+                # Forzamos línea recta en la visualización
+                if abs(drag_r - drag_start_cell[0]) > abs(drag_c - drag_start_cell[1]):
+                    drag_c = drag_start_cell[1]
                 else:
-                    lvl = max(1, tower_levels[current_tool])
-                    stats = TOWER_STATS[current_tool][lvl]
-                    limit = stats["limit"]
-                    cost = stats["cost"]
-                    current_count = sum(1 for t in player_group if
-                                        getattr(t, "tower_id", None) == current_tool and not getattr(t, "is_castle", False))
-                    can_build = (current_cell == allow) and (current_count < limit) and (player_gold >= cost)
-                    shift_y = 30
-                    limit_text = f"{current_count}/{limit}"
+                    drag_r = drag_start_cell[0]
 
-                if not can_build:
-                    tower_img.fill((0, 255, 255, 0), special_flags=pygame.BLEND_RGB_SUB)
+                line_cells = get_line_cells(drag_start_cell[0], drag_start_cell[1], drag_r, drag_c)
 
-                gameboard.blit(tower_img, (posX_trans, posY_trans - shift_y))
+                valid_cells = [cell for cell in line_cells if
+                               0 <= cell[0] < row and 0 <= cell[1] < col and grid[cell[0]][cell[1]] == allow]
+                valid_cells_set = set(valid_cells)
 
-                if limit_text:
-                    text_color = "white" if current_count < limit else "red"
-                    outline_surf = assets.ui_font_medium.render(limit_text, True, "black")
-                    for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
-                        gameboard.blit(outline_surf, (mouseX + 15 + dx, mouseY + 15 + dy))
+                current_wall_cost = min(50, 10 + int(player_level * 0.8))
+                total_cost = len(valid_cells) * current_wall_cost
+                can_build = player_gold >= total_cost
 
-                    text_surf = assets.ui_font_medium.render(limit_text, True, text_color)
-                    gameboard.blit(text_surf, (mouseX + 15, mouseY + 15))
+                for r, c in line_cells:
+                    posX_trans = offsetX + (c * grid_size)
+                    posY_trans = r * grid_size
+                    is_valid = (r, c) in valid_cells_set
 
+                    # Cálculo dinámico del sprite conectado para la preview
+                    mask = 0
+                    if r > 0 and (grid[r - 1][c] == wall or (r - 1, c) in valid_cells_set): mask += 1
+                    if c < col - 1 and (grid[r][c + 1] == wall or (r, c + 1) in valid_cells_set): mask += 2
+                    if r < row - 1 and (grid[r + 1][c] == wall or (r + 1, c) in valid_cells_set): mask += 4
+                    if c > 0 and (grid[r][c - 1] == wall or (r, c - 1) in valid_cells_set): mask += 8
+
+                    tower_img = assets.wall_sprites[mask].copy()
+                    tower_img.set_alpha(150)
+
+                    if not can_build or not is_valid:
+                        tower_img.fill((0, 255, 255, 0), special_flags=pygame.BLEND_RGB_SUB)
+
+                    gameboard.blit(tower_img, (posX_trans, posY_trans))
+
+                # Dibujamos el precio total en el ratón
+                limit_text = f"{total_cost} G"
+                text_color = "white" if can_build else "red"
+                outline_surf = assets.ui_font_medium.render(limit_text, False, "black")
+                for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                    gameboard.blit(outline_surf, (mouseX + 15 + dx, mouseY + 15 + dy))
+                text_surf = assets.ui_font_medium.render(limit_text, False, text_color)
+                gameboard.blit(text_surf, (mouseX + 15, mouseY + 15))
+
+            elif on_grid and last_built_cell != (hoverRow, hoverCol):
+                # --- PREVISUALIZACIÓN NORMAL (Una torre suelta) ---
+                posX_trans = offsetX + (hoverCol * grid_size)
+                posY_trans = hoverRow * grid_size
+                current_cell = grid[hoverRow][hoverCol]
+
+                if current_tool in assets.preview_towers:
+                    tower_img = assets.preview_towers[current_tool].copy()
+
+                    if current_tool == "wall":
+                        can_build = (current_cell == allow) and (player_gold >= min(50, 10 + int(player_level * 0.8)))
+                        shift_y = 0
+                        limit_text = None
+                    else:
+                        lvl = max(1, tower_levels[current_tool])
+                        stats = TOWER_STATS[current_tool][lvl]
+                        limit = stats["limit"]
+                        cost = stats["cost"]
+                        current_count = sum(1 for t in player_group if
+                                            getattr(t, "tower_id", None) == current_tool and not getattr(t, "is_castle", False))
+                        can_build = (current_cell == allow) and (current_count < limit) and (player_gold >= cost)
+                        shift_y = 30
+                        limit_text = f"{current_count}/{limit}"
+
+                    if not can_build:
+                        tower_img.fill((0, 255, 255, 0), special_flags=pygame.BLEND_RGB_SUB)
+
+                    gameboard.blit(tower_img, (posX_trans, posY_trans - shift_y))
+
+                    if limit_text:
+                        text_color = "white" if current_count < limit else "red"
+                        outline_surf = assets.ui_font_medium.render(limit_text, False, "black")
+                        for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                            gameboard.blit(outline_surf, (mouseX + 15 + dx, mouseY + 15 + dy))
+                        text_surf = assets.ui_font_medium.render(limit_text, False, text_color)
+                        gameboard.blit(text_surf, (mouseX + 15, mouseY + 15))
         hp_cells_to_draw = set()
         hovered_struct = None
 
@@ -840,11 +1021,11 @@ async def main():
                     color_text = "yellow"
                 elif current_tool == "repair":
                     if (r, c) in repairing_structures:
-                        action_text = "repairing"
+                        action_text = lang.get("text_repairing", "repairing")
                         color_text = "gray"
                         use_small_font = True
                     else:
-                        action_text = "Max HP" if current_hp >= max_hp else f"-{repair_price} G"
+                        action_text = lang.get("text_max_hp", "Max HP") if current_hp >= max_hp else f"-{repair_price} G"
                         color_text = "gray" if current_hp >= max_hp else "red"
 
                 if action_text:
@@ -858,32 +1039,42 @@ async def main():
             gameboard.blit(assets.panel_bg, (offsetX + width_gameboard, 0))
         else:
             pygame.draw.rect(gameboard, "#222222", (0, 0, offsetX, 720))
-            pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (offsetX + width_gameboard), 720))
+            pygame.draw.rect(gameboard, "#222222", (offsetX + width_gameboard, 0, 1280 - (
+                    offsetX + width_gameboard), 720))
 
+        # --- RELOJ ---
         clock_rect = pygame.Rect(75, 35, 120, 75)
         draw_paper(gameboard, assets.special_paper_sheet, clock_rect)
 
         time_str = f"{current_minute:02d}:{int(game_time % 60):02d}"
-        time_surf = assets.ui_font_large.render(time_str, True, "white")
-        text_x = clock_rect.centerx - time_surf.get_width() // 2
-        text_y = (clock_rect.centery - time_surf.get_height() // 2) + 4
+        time_surf = assets.ui_font_large.render(time_str, False, "white")
 
+        text_x = clock_rect.centerx - (time_surf.get_width() // 2)
+        text_y = clock_rect.centery - (time_surf.get_height() // 2) - 4
         gameboard.blit(time_surf, (text_x, text_y))
 
+        # --- BARRA DE VIDA ---
         hp_ratio = max(0, castle_hp / castle_max_hp)
         draw_bar(gameboard, 25, 140, 220, 35, hp_ratio, assets.big_bar_base, assets.big_bar_fill)
-        hp_text = assets.ui_font_medium.render(f"HP: {int(castle_hp)}/{castle_max_hp}", True, "white")
-        gameboard.blit(hp_text, (135 - hp_text.get_width() // 2, 147))
 
+        hp_text = assets.ui_font_medium.render(f"{lang.get('ui_hp', 'HP')}: {int(castle_hp)}/{castle_max_hp}", False, "white")
+        hp_text_x = 135 - (hp_text.get_width() // 2)
+        hp_text_y = 140 + (35 // 2) - (hp_text.get_height() // 2) - 2
+        gameboard.blit(hp_text, (hp_text_x, hp_text_y))
+
+        # --- BARRA DE XP ---
         xp_ratio = min(1, player_xp / xp_to_next_level)
         draw_bar(gameboard, 40, 190, 190, 25, xp_ratio, assets.small_bar_base, assets.small_bar_fill)
-        xp_text = assets.ui_font_small.render(f"Lvl: {player_level}", True, "white")
-        gameboard.blit(xp_text, (135 - xp_text.get_width() // 2, 195))
+
+        xp_text = assets.ui_font_small.render(f"{lang.get('ui_lvl', 'Lvl')}: {player_level}", False, "white")
+        xp_text_x = 135 - (xp_text.get_width() // 2)
+        xp_text_y = 190 + (25 // 2) - (xp_text.get_height() // 2) - 2
+        gameboard.blit(xp_text, (xp_text_x, xp_text_y))
 
         menu_btn_rect = pygame.Rect(40, 600, 200, 50)
         is_menu_pressed = keys[pygame.K_ESCAPE] or (
                 pygame.mouse.get_pressed()[0] and menu_btn_rect.collidepoint(mouseX, mouseY))
-        draw_action_btn(gameboard, assets, 40, 600, 200, 50, "esc", "Menu", is_pressed=is_menu_pressed)
+        draw_action_btn(gameboard, assets, 40, 600, 200, 50, "esc", lang.get("btn_menu", "Menu"), is_pressed=is_menu_pressed)
 
         # --- BOTONES DE ACELERAR TIEMPO ---
         draw_slot(gameboard, assets, 65, 520, 50, "z", cost=None, is_pressed=is_z_pressed, t_id="speed_z", show_ribbon=False)
@@ -936,8 +1127,11 @@ async def main():
             draw_slot(gameboard, assets, rx + 25, 200, 50, wall_key, current_wall_cost, is_pressed=is_wall_pressed, t_id="wall")
 
             draw_ribbon(gameboard, rx + 100, 210, 140, 40, assets.ribbon_sheet, rw=0)
-            gold_surf = assets.ui_font_large.render(f"{player_gold} G", True, "black")
-            gameboard.blit(gold_surf, (rx + 170 - gold_surf.get_width() // 2, 215))
+            gold_surf = assets.ui_font_medium.render(f"{player_gold} G", True, "black")
+            text_x = rx + 170 - (gold_surf.get_width() // 2)
+            text_y = 210 + 20 - (gold_surf.get_height() // 2) - 4
+
+            gameboard.blit(gold_surf, (text_x, text_y))
 
             repair_all_cost = int((castle_max_hp - castle_hp) * 2)
             sell_key = pygame.key.name(settings.controls["sell"])
@@ -945,10 +1139,10 @@ async def main():
             rep_all_key = pygame.key.name(settings.controls["repair_all"])
 
             is_sell_pressed = (current_tool == "sell")
-            draw_action_btn(gameboard, assets, rx + 40, 420, 200, 50, sell_key, "Demolish", is_pressed=is_sell_pressed)
+            draw_action_btn(gameboard, assets, rx + 40, 420, 200, 50, sell_key, lang.get("btn_demolish", "Demolish"), is_pressed=is_sell_pressed)
 
             is_rep_pressed = (current_tool == "repair")
-            draw_action_btn(gameboard, assets, rx + 40, 510, 200, 50, rep_key, "Repair", is_pressed=is_rep_pressed)
+            draw_action_btn(gameboard, assets, rx + 40, 510, 200, 50, rep_key, lang.get("btn_repair", "Repair"), is_pressed=is_rep_pressed)
 
             # --- CÁLCULO GLOBAL DE REPAIR ALL ---
             valid_repairs = []
@@ -967,7 +1161,7 @@ async def main():
                         total_value = min(50, 10 + int(player_level * 0.8))
                     elif cell_type == turret:
                         t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((
-                                                                                                                        t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
+                                                                                                                    t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
                         if t_obj:
                             t_id = t_obj.tower_id
                             max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_id, 1))] * hp_buff)
@@ -1002,7 +1196,7 @@ async def main():
 
             # Dibujamos el estado del botón hundido por cooldown
             is_rep_all_pressed = (keys[settings.controls["repair_all"]] or (
-                        rep_all_rect.collidepoint(mouseX, mouseY) and mouse_clicked)) or repair_all_cooldown > 0
+                    rep_all_rect.collidepoint(mouseX, mouseY) and mouse_clicked)) or repair_all_cooldown > 0
             img = assets.btn_wide_pressed_img if is_rep_all_pressed else assets.btn_wide_img
             y_off = 4 if is_rep_all_pressed else 0
 
@@ -1023,12 +1217,8 @@ async def main():
                 key_surf = assets.ui_font_medium.render(key_text.upper(), True, "white")
                 gameboard.blit(key_surf, (rep_all_rect.x - 3, rep_all_rect.y - 8 + y_off))
 
-            # Engranaje (Subido unos píxeles)
-            gear_x = rep_all_rect.right - 35
-            gear_y = rep_all_rect.y + 8 + y_off
-
             # Texto centrado de forma absoluta en el botón (como estaba antes)
-            label_surf = assets.ui_font_medium.render("Repair All", False, "black")
+            label_surf = assets.ui_font_medium.render(lang.get("btn_repair_all", "Repair All"), False, "black")
             text_x = rep_all_rect.x + (rep_all_rect.width // 2) - (label_surf.get_width() // 2)
             gameboard.blit(label_surf, (text_x, rep_all_rect.y + 25 - label_surf.get_height() // 2 - 4 + y_off))
 
@@ -1067,7 +1257,7 @@ async def main():
             gameboard.blit(cost_surf, (rx_ribbon + (rw_btn // 2) - (cost_surf.get_width() // 2), ry + 6))
 
         if game_state == "GAME_OVER":
-            draw_game_over_menu(gameboard, assets, current_minute, game_time)
+            draw_game_over_menu(gameboard, assets, current_minute, game_time, lang)
 
             # Botones de Restart y Menu
             restart_rect = pygame.Rect(640 - 220, 500, 200, 50)
@@ -1076,16 +1266,16 @@ async def main():
             restart_pressed = pygame.mouse.get_pressed()[0] and restart_rect.collidepoint(mouseX, mouseY)
             quit_pressed = pygame.mouse.get_pressed()[0] and quit_rect.collidepoint(mouseX, mouseY)
 
-            draw_action_btn(gameboard, assets, 640 - 220, 500, 200, 50, None, "Restart", is_pressed=restart_pressed)
-            draw_action_btn(gameboard, assets, 640 + 20, 500, 200, 50, None, "Menu", is_pressed=quit_pressed)
+            draw_action_btn(gameboard, assets, 640 - 220, 500, 200, 50, None, lang.get("btn_restart", "Restart"), is_pressed=restart_pressed)
+            draw_action_btn(gameboard, assets, 640 + 20, 500, 200, 50, None, lang.get("btn_menu", "Menu"), is_pressed=quit_pressed)
 
         elif game_state == "LEVEL_UP":
-            card_rects = draw_level_up_menu(gameboard, assets, level_up_options, selected_card_idx, offsetX, width_gameboard)
+            card_rects = draw_level_up_menu(gameboard, assets, level_up_options, selected_card_idx, offsetX, width_gameboard, lang)
 
         elif game_state == "PAUSED":
             # MAGIA: Si hay confirmación, el menú de pausa recibe un ratón fuera de la pantalla
             mx, my = (-1, -1) if confirm_action else (mouseX, mouseY)
-            pause_rects = draw_pause_menu(gameboard, assets, mx, my)
+            pause_rects = draw_pause_menu(gameboard, assets, mx, my, lang)
 
             if confirm_action:
                 dark_overlay = pygame.Surface((1280, 720), pygame.SRCALPHA)
@@ -1093,7 +1283,7 @@ async def main():
                 gameboard.blit(dark_overlay, (0, 0))
 
                 draw_ribbon(gameboard, 640 - 150, 360 - 100, 300, 80, assets.ribbon_sheet)
-                q_surf = assets.ui_font_medium.render("Are you sure?", True, "black")
+                q_surf = assets.ui_font_medium.render(lang.get("text_are_you_sure", "Are you sure?"), True, "black")
                 gameboard.blit(q_surf, (640 - q_surf.get_width() // 2, 360 - 75))
 
                 yes_rect = pygame.Rect(640 - 120, 360, 100, 50)
@@ -1102,22 +1292,26 @@ async def main():
                 yes_pressed = pygame.mouse.get_pressed()[0] and yes_rect.collidepoint(mouseX, mouseY)
                 no_pressed = pygame.mouse.get_pressed()[0] and no_rect.collidepoint(mouseX, mouseY)
 
-                draw_action_btn(gameboard, assets, 640 - 120, 360, 100, 50, None, "Yes", is_pressed=yes_pressed)
-                draw_action_btn(gameboard, assets, 640 + 20, 360, 100, 50, None, "No", is_pressed=no_pressed)
-
+                draw_action_btn(gameboard, assets, 640 - 120, 360, 100, 50, None, lang.get("btn_yes", "Yes"), is_pressed=yes_pressed)
+                draw_action_btn(gameboard, assets, 640 + 20, 360, 100, 50, None, lang.get("btn_no", "No"), is_pressed=no_pressed)
 
         elif game_state in ["MAIN_MENU", "MENU_TRANSITION"]:
-            main_menu_rects = draw_main_menu(gameboard, assets, mouseX, mouseY, menu_offset_y)
+            main_menu_rects = draw_main_menu(gameboard, assets, mouseX, mouseY, menu_offset_y, lang)
+
+        # --- DIBUJADO DE LA SELECCIÓN DE IDIOMA ---
+        elif game_state == "LANGUAGE_SELECT":
+            gameboard.blit(assets.bg_menu, (0, 0))
+            lang_rects = draw_language_menu(gameboard, assets, mouseX, mouseY, lang)
 
         elif game_state == "CASTLE_SELECT":
             gameboard.blit(assets.bg_menu, (0, 0))
-            card_rects = draw_level_up_menu(gameboard, assets, castle_options, selected_card_idx, offsetX, width_gameboard)
+            card_rects = draw_level_up_menu(gameboard, assets, level_up_options, selected_card_idx, offsetX, width_gameboard, lang)
 
         if assets.cursor_img:
             gameboard.blit(assets.cursor_img, (mouseX, mouseY))
 
-            # --- ESCALADO NATIVO POR HARDWARE ---
-            # Cero distorsión, cero pérdida de rendimiento, cero chapuzas
+        # --- ESCALADO NATIVO POR HARDWARE ---
+        # Cero distorsión, cero pérdida de rendimiento, cero chapuzas
         screen.blit(gameboard, (0, 0))
 
         pygame.display.flip()
@@ -1129,6 +1323,7 @@ async def main():
         if game_state == "MENU_TRANSITION":
             menu_offset_y -= 1500 * dt
             if menu_offset_y <= -800:
+                level_up_options = get_castle_cards(lang)
                 game_state = "CASTLE_SELECT"
                 menu_offset_y = 0
 
@@ -1154,16 +1349,22 @@ async def main():
                         structures_hp[(r, c)] = min(wall_max_hp,
                                                     structures_hp[(r, c)] + (wall_max_hp * struct_regen_factor))
                     elif cell == turret:
-                        t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
+                        t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((
+                                                                                                                    t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
                         if t_obj:
                             t_max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_obj.tower_id, 1))] * hp_buff)
-                            structures_hp[(r, c)] = min(t_max_hp,structures_hp[(r, c)] + (t_max_hp * struct_regen_factor))
+                            structures_hp[(r, c)] = min(t_max_hp,
+                                                        structures_hp[(r, c)] + (t_max_hp * struct_regen_factor))
 
             # --- SISTEMA DE REPARACIÓN EN EL TIEMPO ---
             finished_repairs = []
             for coords, data in repairing_structures.items():
                 r, c = coords
                 data["anim_timer"] += dt * time_scale
+
+                if coords not in structures_hp:
+                    finished_repairs.append(coords)
+                    continue
 
                 if data["state"] == "repairing":
                     # 1. Calculamos cuánto toca curar este frame
@@ -1182,13 +1383,14 @@ async def main():
                     if data["type"] == wall:
                         max_hp = int((25 + (player_level * 1.5)) * hp_buff)
                     else:
-                        t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
+                        t_obj = next((t for t in player_group if not getattr(t, "is_castle", False) and int((
+                                                                                                                    t.x - offsetX) // grid_size) == c and int(t.y // grid_size) == r), None)
                         if t_obj:
                             max_hp = int(TOWER_BASE_HP[max(1, tower_levels.get(t_obj.tower_id, 1))] * hp_buff)
 
                     if structures_hp[coords] >= max_hp:
                         structures_hp[coords] = max_hp
-                        data["target_heal"] = 0 # Forzamos el fin si ha llegado al 100% de cualquier forma
+                        data["target_heal"] = 0  # Forzamos el fin si ha llegado al 100% de cualquier forma
 
                     # 4. Comprobamos si el obrero ya ha terminado su cuota
                     if data["target_heal"] <= 0:
@@ -1293,8 +1495,8 @@ async def main():
                 update_neighbors_walls(r, c, grid, wall_masks, ruin_masks)
 
             for enemy in enemy_group:
-                #No hacen daño por contacto
-                if type(enemy).__name__ not in  ["Boss", "Shooter"]:
+                # No hacen daño por contacto
+                if type(enemy).__name__ not in ["Boss", "Shooter"]:
                     dist = enemy.pos.distance_to(pygame.math.Vector2(castle_obj.rect.center))
                     if dist < (enemy.radius + 40):
                         if not hasattr(enemy, "castle_attack_timer"):
@@ -1366,7 +1568,7 @@ async def main():
                     chest.trigger_level_up = False
                     player_gold += 100
                     game_state = "LEVEL_UP"
-                    level_up_options = get_level_up_cards(player_level, active_towers, tower_levels, active_passives, passive_levels)
+                    level_up_options = get_level_up_cards(player_level, active_towers, tower_levels, active_passives, passive_levels, lang)
 
                     # Preparamos el fundido para cuando volvamos a "PLAYING"
                     chest.state = "fading_white"
@@ -1434,7 +1636,6 @@ async def main():
                         chest_group.add(Chest(enemy.pos.x, enemy.pos.y, assets))
                     enemy.current_frame = 0
 
-
                     gold_buff = 1.0 + (passive_levels.get("gold", 0) * 0.05)
                     xp_buff = 1.0 + (passive_levels.get("xp", 0) * 0.05)
                     player_gold += int(enemy.gold_value * gold_buff)
@@ -1463,7 +1664,9 @@ async def main():
                             xp_to_next_level = int(xp_to_next_level * 2.5)
 
                         game_state = "LEVEL_UP"
-                        level_up_options = get_level_up_cards(player_level, active_towers, tower_levels, active_passives, passive_levels)
-
+                        level_up_options = get_level_up_cards(player_level, active_towers, tower_levels, active_passives, passive_levels, lang)
     pygame.quit()
-asyncio.run(main())
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
